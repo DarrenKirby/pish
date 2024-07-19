@@ -1,0 +1,17 @@
+### pish - the python idiot shell
+
+Similar to bash, but without the shell scripting parts (yet).
+
+Implemented so far:
+ * eg: `echo $HOME` will output value of envvars
+ * arbitrary piped commands work ie: `cat foo.txt | sort | uniq`
+ * arbitrary `&&` commands work ie: `./configure && make && make install`
+ * arbitrary `||` commands work ie: `mount-l || cat /etc/mtab || cat /proc/mounts`
+ * STDOUT redirection works ie: `df -h > df.txt` or `ifconfig >> netlog.txt`
+ * Customizable prompts, though this is currently crufty.
+ * `~/.pishrc` configuration file.
+
+My eventual plan is to wrap this with `prompt_toolkit` and make it a full-screen term app so it does
+not need to run or be started fromm another shell.
+
+Released under the GPL-3 license.
