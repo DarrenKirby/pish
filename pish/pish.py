@@ -35,8 +35,6 @@ CONFFILE = os.path.expanduser("~") + "/.pishrcjkhkh"
 USRPROMT = False
 
 # Load prompt from config file
-# home_dir = os.path.expanduser("~")
-# config_path = os.path.join(home_dir, ".pishrc")
 data={}
 if os.path.exists(CONFFILE):
     with open(CONFFILE, "rb") as f:
@@ -55,12 +53,12 @@ else:
 
 
 def get_prompt(p: str) -> Optional[list[tuple]|str]:
+    """ Returns a prompt to the prompt session """
     if USRPROMT:
         local_vars = {}
         exec('prompt = ' + p, globals(), local_vars)
         return local_vars['prompt']
-    else:
-        return p
+    return p
 
 
 def count_lines(fname: str) -> int:
@@ -68,15 +66,17 @@ def count_lines(fname: str) -> int:
     def _make_gen(reader):
         while True:
             b = reader(2 ** 16)
-            if not b: break
+            if not b:
+                break
             yield b
 
-    with open(fname, "rb") as f:
-        count = sum(buf.count(b"\n") for buf in _make_gen(f.raw.read))
+    with open(fname, "rb") as fp:
+        count = sum(buf.count(b"\n") for buf in _make_gen(fp.raw.read))
     return count
 
 
 def write_history_file(command: str, fname: str) -> None:
+    """ Writes the current command to the history file """
     try:
         with open(fname, "a", encoding="UTF-8") as fp:
             fp.write(command + '\n')
@@ -85,10 +85,38 @@ def write_history_file(command: str, fname: str) -> None:
 
 
 def del_history_entries(start: int, end: Optional[int], fname: str) -> int:
-    pass
+    """ Given the `history -d` command, deletes the specified commands
+    from the history file """
+    try:
+        with open(fname, "r", encoding="UTF-8") as fp:
+            lines = fp.readlines()
+            # Reverse the lines list to read from end of file
+            lines = lines[::-1]
+            fp.close()
+    except IOError as e:
+        print(f"Could not read history file {fname}: {e}")
+        return 1
+
+    if end is None:
+        del lines[start]
+    else:
+        del lines[start:end+1]
+
+    lines = lines[::-1]
+    # Re-write the file
+    try:
+        with open(fname, "w", encoding="UTF-8") as fp:
+            for line in lines:
+                fp.write(line)
+            fp.close()
+    except IOError as e:
+        print(f"Could not write history file {fname}: {e}")
+        return 1
+    return 0
 
 
 def print_history(lines_to_print: int, fname: str) -> int:
+    """ Prints a numbered list of commands from the history file """
     try:
         with open(fname, "r", encoding="UTF-8") as fp:
             lines = fp.readlines()
@@ -119,12 +147,13 @@ def run_history_command(command: str, fname: str) -> int:
     elif isinstance(args[0], int):
         print_history(args[0], fname)
     elif args[0] == '-c':
-        open(fname, "w").close()
+        with open(fname, "w", encoding="UTF-8") as fp:
+            fp.close()
     elif args[0] == '-d':
         if len(args) == 2:
-            del_history_entries(args[-1], None)
+            del_history_entries(int(args[-1]), None, fname)
         else:
-            del_history_entries(args[1], args[2])
+            del_history_entries(int(args[1]), int(args[2]), fname)
     else:
         print(f"Invalid history command: `{command}`")
         return 1
