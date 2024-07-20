@@ -6,7 +6,7 @@
  * `cd`
  * arbitrary piped commands work ie: `cat foo.txt | sort | uniq`
  * arbitrary `&&` commands work ie: `./configure && make && make install`
- * arbitrary `||` commands work ie: `mount-l || cat /etc/mtab || cat /proc/mounts`
+ * arbitrary `||` commands work ie: `mount -l || cat /etc/mtab || cat /proc/mounts`
  * STDOUT redirection works ie: `df -h > df.txt` or `ifconfig >> netlog.txt`
 """
 
@@ -15,42 +15,143 @@ import shlex
 import sys
 import os
 import platform
-import gnureadline
+import time
 
-from colours import BLUE, PURPLE, RESET
+import tomllib
+from typing import Optional
 
-# To appease pylint
-assert gnureadline
+from prompt_toolkit import PromptSession
+from prompt_toolkit.styles import Style
+from prompt_toolkit.lexers import PygmentsLexer
+from pygments.lexers.shell import BashLexer
+
 
 # Set up globals
 # Version, ps1 prompt
 VERSION = 0.4
-DEFAULT_PS1 = f"[{os.getlogin()}@{platform.node()}]$ "
+DEFAULT_PROMPT = f"[{os.getlogin()}@{platform.node()}]$ "
+HISTFILE = os.path.expanduser("~") + "/.pish_history"
+CONFFILE = os.path.expanduser("~") + "/.pishrcjkhkh"
+USRPROMT = False
 
 # Load prompt from config file
-home_dir = os.path.expanduser("~")
-config_path = os.path.join(home_dir, ".pishrc")
-if os.path.exists(config_path):
-    with open(config_path, 'r', encoding="utf-8") as config_file:
-        for line in config_file:
-            if line.startswith("PS1 ="):
-                exec(line)
-                break
+# home_dir = os.path.expanduser("~")
+# config_path = os.path.join(home_dir, ".pishrc")
+data={}
+if os.path.exists(CONFFILE):
+    with open(CONFFILE, "rb") as f:
+        data = tomllib.load(f)
+# Retrieve prompt from config file
+if 'prompt' in data:
+    USRPROMT= True
+    PROMPT = f"{' '.join(data['prompt'].split())}"
 else:
-    PS1 = DEFAULT_PS1
+    PROMPT = DEFAULT_PROMPT
+# Retrive prompt style from config file
+if 'style' in data:
+    style = Style.from_dict(data['style'])
+else:
+    style = Style.from_dict({'': '#dddddd'})
+
+
+def get_prompt(p: str) -> Optional[list[tuple]|str]:
+    if USRPROMT:
+        local_vars = {}
+        exec('prompt = ' + p, globals(), local_vars)
+        return local_vars['prompt']
+    else:
+        return p
+
+
+def count_lines(fname: str) -> int:
+    """ Count and return lines in a file """
+    def _make_gen(reader):
+        while True:
+            b = reader(2 ** 16)
+            if not b: break
+            yield b
+
+    with open(fname, "rb") as f:
+        count = sum(buf.count(b"\n") for buf in _make_gen(f.raw.read))
+    return count
+
+
+def write_history_file(command: str, fname: str) -> None:
+    try:
+        with open(fname, "a", encoding="UTF-8") as fp:
+            fp.write(command + '\n')
+    except IOError as e:
+        print(f"Could not write to {fname}: {e}")
+
+
+def del_history_entries(start: int, end: Optional[int], fname: str) -> int:
+    pass
+
+
+def print_history(lines_to_print: int, fname: str) -> int:
+    try:
+        with open(fname, "r", encoding="UTF-8") as fp:
+            lines = fp.readlines()
+            # Reverse the lines list to read from end of file
+            lines = lines[::-1]
+            fp.close()
+    except IOError as e:
+        print(f"Could not read history file {fname}: {e}")
+        return 1
+
+    line_count = 1
+    if lines_to_print == 0:
+        for line in lines:
+            print(f"{line_count} {line.replace('\n','')}")
+            line_count += 1
+    else:
+        for line in lines[0:lines_to_print]:
+            print(f"{line_count} {line.replace('\n','')}")
+            line_count += 1
+    return 0
+
+
+def run_history_command(command: str, fname: str) -> int:
+    """ Dispatcher for `history` commands """
+    args = command.split()[1:]
+    if len(args) == 0:
+        print_history(0, fname)
+    elif isinstance(args[0], int):
+        print_history(args[0], fname)
+    elif args[0] == '-c':
+        open(fname, "w").close()
+    elif args[0] == '-d':
+        if len(args) == 2:
+            del_history_entries(args[-1], None)
+        else:
+            del_history_entries(args[1], args[2])
+    else:
+        print(f"Invalid history command: `{command}`")
+        return 1
+    return 0
 
 
 def run_echo_command(command: str, last_exit_status: int) -> int:
-    """ Decide if we are echoing environmental variables """
+    """ Dispatch `echo` command
+
+    If the first arg starts with `$` then return value of variable,
+    otherwise, just print the arguments
+    """
     args = " ".join(command.split()[1:])
     if args[0] == "$":
+        # Last exit status
         if args[1] == "?":
             print(last_exit_status)
+        # pid of running shell
+        elif args[1] == "$":
+            print(os.getpid())
+        # Lookup if it is a set envvar
         else:
             try:
                 print(os.environ[args[1:]])
             except KeyError:
                 sys.stdout.write("\n")
+    # Just print the arguments
     else:
         print(args)
     return 0
@@ -110,7 +211,7 @@ def run_or_command(command: str) -> int:
         return 1
 
 
-def run_append_command(command):
+def run_append_command(command: str) -> int:
     """ redirect stdout to a file, append if exists """
     command, filename = command.split(">>")
     cmd = shlex.split(command.strip())
@@ -126,7 +227,7 @@ def run_append_command(command):
     return es.returncode
 
 
-def run_redirect_command(command):
+def run_redirect_command(command: str) -> int:
     """ redirect stdout to a file, clobber if exists """
     command, filename = command.split(">")
     cmd = shlex.split(command.strip())
@@ -159,38 +260,52 @@ def mainloop():
     print(f"pish version {VERSION} written by Darren Kirby")
     last_exit_status = 0
 
+
+    session = PromptSession(lexer=PygmentsLexer(BashLexer))
+    #session = PromptSession()
     while True:
-        command = input(PS1)
-        # Delete extra white space
-        command = command.strip()
-        # For colour output
-        if command.startswith('ls'):
-            command = 'ls -G --color' + command[2:]
-        # Quit the shell
-        if command in ("exit", "quit"):
+        try:
+            #command = input(PS1)
+            command = session.prompt(get_prompt(PROMPT), style=style)
+            # Quit the shell
+            if command in ("quit"):
+                sys.exit(0)
+            # Write to HISTFILE
+            write_history_file(command, HISTFILE)
+            # Delete extra white space
+            command = command.strip()
+            # For colour output
+            if command.startswith('ls'):
+                command = 'ls -G --color' + command[2:]
+
+            if command == '':
+                continue
+
+            if command.startswith('history'):
+                last_exit_status = run_history_command(command, HISTFILE)
+            elif "||" in command:
+                last_exit_status = run_or_command(command)
+            elif "|" in command:
+                last_exit_status = run_pipe_command(command)
+            elif "&&" in command:
+                last_exit_status = run_and_command(command)
+            elif ">>" in command:
+                last_exit_status = run_append_command(command)
+            elif ">" in command:
+                last_exit_status = run_redirect_command(command)
+
+            # 'echo' builtin
+            elif command.startswith('echo'):
+                last_exit_status = run_echo_command(command, last_exit_status)
+            # cd builtin
+            elif command.split()[0] == 'cd':
+                os.chdir(" ".join(command.split()[1:]))
+                last_exit_status = 0
+            # Regular command
+            else:
+                last_exit_status = run_command(command)
+        except KeyboardInterrupt:
             sys.exit(0)
-
-        elif "||" in command:
-            last_exit_status = run_or_command(command)
-        elif "|" in command:
-            last_exit_status = run_pipe_command(command)
-        elif "&&" in command:
-            last_exit_status = run_and_command(command)
-        elif ">>" in command:
-            last_exit_status = run_append_command(command)
-        elif ">" in command:
-            last_exit_status = run_redirect_command(command)
-
-        # 'echo' builtin
-        elif command.startswith('echo'):
-            last_exit_status = run_echo_command(command, last_exit_status)
-        # cd builtin
-        elif command.split()[0] == 'cd':
-            os.chdir(" ".join(command.split()[1:]))
-            last_exit_status = 0
-        # Regular command
-        else:
-            last_exit_status = run_command(command)
 
     return last_exit_status
 
