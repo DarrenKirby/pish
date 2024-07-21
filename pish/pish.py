@@ -17,7 +17,7 @@ import platform
 import time
 
 import tomllib
-#from typing import Optional
+from typing import Optional
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
