@@ -31,7 +31,7 @@ from pygments.lexers.shell import BashLexer
 VERSION = 0.4
 DEFAULT_PROMPT = f"[{os.getlogin()}@{platform.node()}]$ "
 HISTFILE = os.path.expanduser("~") + "/.pish_history"
-CONFFILE = os.path.expanduser("~") + "/.pishrcjkhkh"
+CONFFILE = os.path.expanduser("~") + "/.pishrc"
 USRPROMT = False
 
 # Load prompt from config file
