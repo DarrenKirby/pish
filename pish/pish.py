@@ -36,21 +36,31 @@ import history
 
 
 # Set up globals
-# Some of these will eventually be parted out to the config file
 VERSION = '0.0.5'
 DEFAULT_PROMPT = f"[{os.getlogin()}@{platform.node()}]$ "
-HISTFILE = os.path.expanduser("~") + "/.pish_history"
-CONFFILE = os.path.expanduser("~") + "/.pishrc"
+HOME = os.path.expanduser("~")
+CONFFILE = HOME + "/.pishrc"
 USRPROMT = False
 
 # Dirty hack to appease pylint
 assert time
 
-# Load prompt from config file
+# Parse config file, and set vars
 data={}
 if os.path.exists(CONFFILE):
     with open(CONFFILE, "rb") as f:
         data = tomllib.load(f)
+
+# History-related settings
+if 'histfile' in data:
+    HISTFILE = data['histfile']
+else:
+    HISTFILE = HOME + "/.pish_history"
+if 'histsize' in data:
+    HISTSIZE = data['histsize']
+else:
+    HISTSIZE = 500
+
 # Retrieve prompt from config file
 if 'prompt' in data:
     USRPROMT= True
@@ -70,7 +80,7 @@ def _get_files() -> list:
     return files
 
 
-def get_prompt(p: str) -> Optional[list[tuple]|str]:
+def _get_prompt(p: str) -> Optional[list[tuple]|str]:
     """ Returns a prompt to the prompt session """
     if USRPROMT:
         local_vars: dict[str,str] = {}
@@ -105,15 +115,14 @@ def mainloop():
     last_exit_status = 0
     h_array = history.load_history_file(HISTFILE)
     # Start shell in home directory
-    home = os.path.expanduser("~")
-    os.chdir(home)
+    os.chdir(HOME)
 
     session = PromptSession(lexer=PygmentsLexer(BashLexer))
     # Start infinite loop and run until `quit` command
     # or <ctrl-c> is trapped.
     while True:
         try:
-            command = session.prompt(get_prompt(PROMPT),
+            command = session.prompt(_get_prompt(PROMPT),
                                      enable_history_search=True,
                                      style=style,
                                      completer=WordCompleter(_get_files()),
@@ -127,8 +136,12 @@ def mainloop():
 
             # Write command to history buffer.
             # bash writes the command before running it
-            # so we do as well to be consistant
-            h_array.append(command)
+            # so we do as well to be consistant.
+            # Prefacing a command with a single space
+            # will prevent it from being written to history
+            if not command.startswith(" "):
+                h_array.append(command)
+            # ...now strip the space
             command = command.strip()
             # For colour output. Prolly shouldn't be hard-coded here
             # but it's for my own preference. Will likely stay until
@@ -169,7 +182,7 @@ def mainloop():
             # cd builtin
             elif command.startswith('cd'):
                 if len(command.split()[1:]) == 0:
-                    os.chdir(home)
+                    os.chdir(HOME)
                 else:
                     os.chdir(" ".join(command.split()[1:]))
                 last_exit_status = 0
