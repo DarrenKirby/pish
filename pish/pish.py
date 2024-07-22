@@ -19,20 +19,16 @@ import platform
 import time
 import re
 import tomllib
-import readline
 from typing import Optional
 
 # prompt_toolkit imports
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.lexers import PygmentsLexer
-from pygments.lexers.shell import BashLexer
-from prompt_toolkit.history import InMemoryHistory
-from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.shortcuts import set_title
-
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.shortcuts import CompleteStyle
+from pygments.lexers.shell import BashLexer
 
 # Local imports
 import runners
@@ -67,11 +63,11 @@ if 'style' in data:
 else:
     style = Style.from_dict({'': '#dddddd'})
 
-def _get_files():
-    return glob.glob('*', root_dir=os.getcwd())
-
-readline.set_completer_delims(' \t\n')
-file_completer = WordCompleter(glob.glob('*')) #, root_dir=os.getcwd()))
+# Used for tab completion
+def _get_files() -> list:
+    files = glob.glob('*')
+    files.sort()
+    return files
 
 
 def get_prompt(p: str) -> Optional[list[tuple]|str]:
@@ -118,10 +114,11 @@ def mainloop():
     while True:
         try:
             command = session.prompt(get_prompt(PROMPT),
+                                     enable_history_search=True,
                                      style=style,
-                                     auto_suggest=AutoSuggestFromHistory(),
-                                     completer=file_completer,
-                                     complete_style=CompleteStyle.READLINE_LIKE)
+                                     completer=WordCompleter(_get_files()),
+                                     complete_style=CompleteStyle.READLINE_LIKE,
+            )
             # Write the history buffer
             # to file before bailing
             if command in ("quit"):
