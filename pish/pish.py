@@ -15,6 +15,7 @@ import sys
 import os
 import platform
 import time
+import re
 
 import tomllib
 from typing import Optional
@@ -29,13 +30,15 @@ import history
 
 
 # Set up globals
-# Version, ps1 prompt
+# Some of these will eventually be parted out to the config file
 VERSION = '0.0.5'
 DEFAULT_PROMPT = f"[{os.getlogin()}@{platform.node()}]$ "
 HISTFILE = os.path.expanduser("~") + "/.pish_history"
 CONFFILE = os.path.expanduser("~") + "/.pishrc"
 USRPROMT = False
 
+# Dirty hack to appease pylint
+assert time
 
 # Load prompt from config file
 data={}
@@ -58,7 +61,7 @@ else:
 def get_prompt(p: str) -> Optional[list[tuple]|str]:
     """ Returns a prompt to the prompt session """
     if USRPROMT:
-        local_vars = {}
+        local_vars: dict[str,str] = {}
         exec('prompt = ' + p, globals(), local_vars)
         return local_vars['prompt']
     return p
@@ -78,11 +81,17 @@ def count_lines(fname: str) -> int:
     return count
 
 
+def contains_glob(command):
+    """ Simple regex to see if a command is likely to have shell globbing """
+    glob_pattern = re.compile(r'[*?\[\]]')
+    return bool(glob_pattern.search(command))
+
+
 def mainloop():
     """ The main loop and command dispatcher """
     print(f"pish version {VERSION} written by Darren Kirby")
     last_exit_status = 0
-    HISTORY = history.load_history_file(HISTFILE)
+    h_array = history.load_history_file(HISTFILE)
 
 
     session = PromptSession(lexer=PygmentsLexer(BashLexer))
@@ -90,37 +99,52 @@ def mainloop():
     # or <ctrl-c> is trapped.
     while True:
         try:
-            #command = input(PS1)
             command = session.prompt(get_prompt(PROMPT), style=style)
-            # Quit the shell
+            # Write the history buffer
+            # to file before bailing
             if command in ("quit"):
-                history.write_history_file(HISTORY, HISTFILE)
+                history.write_history_file(h_array, HISTFILE)
                 sys.exit(0)
-            # Write command to HISTORY
-            HISTORY.append(command)
-            # Delete extra white space
+
+            # Write command to history buffer.
+            # bash writes the command before running it
+            # so we do as well to be consistant
+            h_array.append(command)
             command = command.strip()
-            # For colour output
+            # For colour output. Prolly shouldn't be hard-coded here
+            # but it's for my own preference. Will likely stay until
+            # I implement aliases
             if command.startswith('ls'):
                 command = 'ls -G --color' + command[2:]
 
+            # If command is empty we just print a new prompt
             if command == '':
                 continue
 
-            if command.startswith('history'):
-                last_exit_status, HISTORY = runners.run_history_command(command, HISTORY, HISTFILE)
+            # The previous functions are not mutually-exclusive
+            # The following are
+
+            # Check for shell globbing
+            if contains_glob(command):
+                last_exit_status = runners.run_glob_command(command)
+            elif command.startswith('history'):
+                last_exit_status, h_array = runners.run_history_command(command, h_array, HISTFILE)
+
+            # pipe/AND/OR linked commands
             elif "||" in command:
                 last_exit_status = runners.run_or_command(command)
             elif "|" in command:
                 last_exit_status = runners.run_pipe_command(command)
             elif "&&" in command:
                 last_exit_status = runners.run_and_command(command)
+
+            # Commands with redirected IO
             elif ">>" in command:
                 last_exit_status = runners.run_append_command(command)
             elif ">" in command:
                 last_exit_status = runners.run_redirect_command(command)
 
-            # 'echo' builtin
+            # echo builtin
             elif command.startswith('echo'):
                 last_exit_status = runners.run_echo_command(command, last_exit_status)
             # cd builtin
@@ -132,7 +156,7 @@ def mainloop():
                 last_exit_status = runners.run_command(command)
 
         except KeyboardInterrupt:
-            history.write_history_file(HISTORY, HISTFILE)
+            history.write_history_file(h_array, HISTFILE)
             sys.exit(0)
 
     return last_exit_status
