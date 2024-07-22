@@ -1,3 +1,8 @@
+""" history.py - functions that implement history
+
+
+"""
+
 from typing import Optional
 
 
@@ -9,7 +14,6 @@ def load_history_file(fname: str) -> list:
             fp.close()
     except IOError as e:
         print(f"Could not read history file {fname}: {e}")
-        return 1
     return lines
 
 
@@ -54,5 +58,3 @@ def print_history(lines_to_print: int, h_array: list) -> int:
             print(f"{line_count:>{line_number_width}}  {line}")
             line_count += 1
     return 0
-
-
