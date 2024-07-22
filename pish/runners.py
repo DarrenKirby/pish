@@ -7,25 +7,26 @@ import sys
 import os
 import subprocess
 import shlex
+from typing import Deque
 
 import history
 
 
-def run_history_command(command: str, h_array: list, fname: str) -> tuple[int, list]:
+def run_history_command(command: str, h_array: Deque, fname: str, size: int) -> tuple[int, Deque]:
     """ Dispatcher for `history` commands """
     args = command.split()[1:]
     if len(args) == 0:
         history.print_history(0, h_array)
 
     elif args[0] == '-c':
-        h_array = []
+        h_array.clear()
     elif args[0] == '-w':
         history.write_history_file(h_array, fname)
     elif args[0] == '-d':
         if len(args) == 2:
-            h_array = history.del_history_entries(int(args[-1]), None, h_array)
+            h_array = history.del_history_entries(int(args[-1]), None, h_array, size)
         else:
-            h_array = history.del_history_entries(int(args[1]), int(args[2]), h_array)
+            h_array = history.del_history_entries(int(args[1]), int(args[2]), h_array, size)
     elif isinstance(int(args[0]), int):
         history.print_history(int(args[0]), h_array)
     else:
@@ -92,7 +93,9 @@ def run_and_command(command: str) -> int:
         while len(commands) > 0:
             if es == 0:
                 cp = subprocess.run(shlex.split(commands.pop(0)), check=False)
-            es = cp.returncode
+                es = cp.returncode
+            else:
+                return es
         return es
     except Exception as e:                          # pylint: disable=broad-except
         print(f"Failed to execute command: {e}")
@@ -102,7 +105,6 @@ def run_and_command(command: str) -> int:
 def run_or_command(command: str) -> int:
     """ Only run commands if previous failed """
     commands = command.split("||")
-    #es = 0
     try:
         while len(commands) > 0:
             cp = subprocess.run(shlex.split(commands.pop(0)), check=False)

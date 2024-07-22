@@ -21,6 +21,7 @@ import re
 import tomllib
 from typing import Optional
 
+
 # prompt_toolkit imports
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
@@ -113,7 +114,7 @@ def mainloop():
     """ The main loop and command dispatcher """
     print(f"pish version {VERSION} written by Darren Kirby")
     last_exit_status = 0
-    h_array = history.load_history_file(HISTFILE)
+    h_array = history.load_history_file(HISTFILE, HISTSIZE)
     # Start shell in home directory
     os.chdir(HOME)
 
@@ -156,11 +157,11 @@ def mainloop():
             # The previous functions are not mutually-exclusive
             # The following are
 
-            # Check for shell globbing
-            if contains_glob(command):
-                last_exit_status = runners.run_glob_command(command)
-            elif command.startswith('history'):
-                last_exit_status, h_array = runners.run_history_command(command, h_array, HISTFILE)
+            if command.startswith('history'):
+                last_exit_status, h_array = runners.run_history_command(command,
+                                                                        h_array,
+                                                                        HISTFILE,
+                                                                        HISTSIZE)
 
             # pipe/AND/OR linked commands
             elif "||" in command:
@@ -186,6 +187,9 @@ def mainloop():
                 else:
                     os.chdir(" ".join(command.split()[1:]))
                 last_exit_status = 0
+            # Check for shell globbing
+            elif contains_glob(command):
+                last_exit_status = runners.run_glob_command(command)
             # Regular command
             else:
                 last_exit_status = runners.run_command(command)
