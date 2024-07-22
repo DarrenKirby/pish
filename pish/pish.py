@@ -10,21 +10,31 @@
  * STDOUT redirection works ie: `df -h > df.txt` or `ifconfig >> netlog.txt`
 """
 
-
+# Standard lib imports
 import sys
 import os
+import os.path
+import glob
 import platform
 import time
 import re
-
 import tomllib
+import readline
 from typing import Optional
 
+# prompt_toolkit imports
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style
 from prompt_toolkit.lexers import PygmentsLexer
 from pygments.lexers.shell import BashLexer
+from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.shortcuts import set_title
 
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.shortcuts import CompleteStyle
+
+# Local imports
 import runners
 import history
 
@@ -56,6 +66,12 @@ if 'style' in data:
     style = Style.from_dict(data['style'])
 else:
     style = Style.from_dict({'': '#dddddd'})
+
+def _get_files():
+    return glob.glob('*', root_dir=os.getcwd())
+
+readline.set_completer_delims(' \t\n')
+file_completer = WordCompleter(glob.glob('*')) #, root_dir=os.getcwd()))
 
 
 def get_prompt(p: str) -> Optional[list[tuple]|str]:
@@ -99,7 +115,11 @@ def mainloop():
     # or <ctrl-c> is trapped.
     while True:
         try:
-            command = session.prompt(get_prompt(PROMPT), style=style)
+            command = session.prompt(get_prompt(PROMPT),
+                                     style=style,
+                                     auto_suggest=AutoSuggestFromHistory(),
+                                     completer=file_completer,
+                                     complete_style=CompleteStyle.READLINE_LIKE)
             # Write the history buffer
             # to file before bailing
             if command in ("quit"):
@@ -163,4 +183,5 @@ def mainloop():
 
 
 if __name__ == '__main__':
+    set_title(f"pish version {VERSION}")
     exit_status = mainloop()
