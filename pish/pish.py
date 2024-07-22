@@ -108,7 +108,9 @@ def mainloop():
     print(f"pish version {VERSION} written by Darren Kirby")
     last_exit_status = 0
     h_array = history.load_history_file(HISTFILE)
-
+    # Start shell in home directory
+    home = os.path.expanduser("~")
+    os.chdir(home)
 
     session = PromptSession(lexer=PygmentsLexer(BashLexer))
     # Start infinite loop and run until `quit` command
@@ -168,8 +170,11 @@ def mainloop():
             elif command.startswith('echo'):
                 last_exit_status = runners.run_echo_command(command, last_exit_status)
             # cd builtin
-            elif command.split()[0] == 'cd':
-                os.chdir(" ".join(command.split()[1:]))
+            elif command.startswith('cd'):
+                if len(command.split()[1:]) == 0:
+                    os.chdir(home)
+                else:
+                    os.chdir(" ".join(command.split()[1:]))
                 last_exit_status = 0
             # Regular command
             else:
