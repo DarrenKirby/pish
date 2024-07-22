@@ -3,11 +3,14 @@
 
 """
 
+import os
 from typing import Optional
 
 
 def load_history_file(fname: str) -> list:
     """ Loads the history file """
+    if not os.path.exists(fname):
+        return []
     try:
         with open(fname, "r", encoding="UTF-8") as fp:
             lines = fp.read().splitlines()
