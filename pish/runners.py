@@ -1,3 +1,8 @@
+""" runners.py - functions that run commands
+
+
+"""
+
 import sys
 import os
 import subprocess
@@ -25,7 +30,7 @@ def run_history_command(command: str, h_array: list, fname: str) -> tuple[int, l
         history.print_history(int(args[0]), h_array)
     else:
         print(f"Invalid history command: `{command}`")
-        return 1
+        return (1, h_array)
     return (0, h_array)
 
 
@@ -83,7 +88,6 @@ def run_and_command(command: str) -> int:
     """ Only run commands if previous were successfull """
     commands = command.split("&&")
     es = 0
-    cp = None
     try:
         while len(commands) > 0:
             if es == 0:
@@ -98,7 +102,7 @@ def run_and_command(command: str) -> int:
 def run_or_command(command: str) -> int:
     """ Only run commands if previous failed """
     commands = command.split("||")
-    es = 0
+    #es = 0
     try:
         while len(commands) > 0:
             cp = subprocess.run(shlex.split(commands.pop(0)), check=False)
@@ -147,10 +151,15 @@ def run_redirect_command(command: str) -> int:
 def run_command(command: str) -> int:
     """ Run regular commands """
 
-    command = shlex.split(command)
+    cmd = shlex.split(command)
     try:
-        es = subprocess.run(command, check=False)
+        es = subprocess.run(cmd, check=False)
         return es.returncode
     except Exception:                                          # pylint: disable=broad-except
-        print(f"Command: `{command[0]}` not found")
+        print(f"Command: `{cmd[0]}` not found")
         return 127  # `command not found`
+
+def run_glob_command(command: str) -> int:
+    """ Run commands with glob expansions """
+    print("Found a glob!")
+    return 0
