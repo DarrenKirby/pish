@@ -33,11 +33,12 @@ from pygments.lexers.shell import BashLexer
 
 # Local imports
 import runners
-import history
+#import history
+from historybuff import HistoryBuff
 
 
 # Set up globals
-VERSION = '0.0.5'
+VERSION = '0.0.6'
 DEFAULT_PROMPT = f"[{os.getlogin()}@{platform.node()}]$ "
 HOME = os.path.expanduser("~")
 CONFFILE = HOME + "/.pishrc"
@@ -114,7 +115,9 @@ def mainloop():
     """ The main loop and command dispatcher """
     print(f"pish version {VERSION} written by Darren Kirby")
     last_exit_status = 0
-    h_array = history.load_history_file(HISTFILE, HISTSIZE)
+    # Initialize the history buffer
+    hb = HistoryBuff(HISTSIZE, HISTFILE)
+    hb.load_from_file(hb.histfile)
     # Start shell in home directory
     os.chdir(HOME)
 
@@ -132,16 +135,16 @@ def mainloop():
             # Write the history buffer
             # to file before bailing
             if command in ("quit"):
-                history.write_history_file(h_array, HISTFILE)
+                hb.write_to_file(HISTFILE)
                 sys.exit(0)
 
             # Write command to history buffer.
             # bash writes the command before running it
             # so we do as well to be consistant.
-            # Prefacing a command with a single space
-            # will prevent it from being written to history
+            # Prefacing a command with a single space will
+            # prevent it from being written to the history buffer
             if not command.startswith(" "):
-                h_array.append(command)
+                hb.append(command)
             # ...now strip the space
             command = command.strip()
             # For colour output. Prolly shouldn't be hard-coded here
@@ -155,13 +158,10 @@ def mainloop():
                 continue
 
             # The previous functions are not mutually-exclusive
-            # The following are
+            # The following are:
 
             if command.startswith('history'):
-                last_exit_status, h_array = runners.run_history_command(command,
-                                                                        h_array,
-                                                                        HISTFILE,
-                                                                        HISTSIZE)
+                last_exit_status, hb = runners.run_history_command(command, hb)
 
             # pipe/AND/OR linked commands
             elif "||" in command:

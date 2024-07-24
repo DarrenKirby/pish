@@ -9,30 +9,34 @@ import subprocess
 import shlex
 from typing import Deque
 
-import history
+#import history
+from historybuff import HistoryBuff
 
 
-def run_history_command(command: str, h_array: Deque, fname: str, size: int) -> tuple[int, Deque]:
+def run_history_command(command: str, hb: HistoryBuff) -> tuple[int, HistoryBuff]:
     """ Dispatcher for `history` commands """
     args = command.split()[1:]
     if len(args) == 0:
-        history.print_history(0, h_array)
+        hb.print_buff(0)
 
     elif args[0] == '-c':
-        h_array.clear()
+        hb.clear()
     elif args[0] == '-w':
-        history.write_history_file(h_array, fname)
+        if not args[1]:
+            hb.write_to_file(hb.histfile)
+        else:
+            hb.write_to_file(args[1])
     elif args[0] == '-d':
         if len(args) == 2:
-            h_array = history.del_history_entries(int(args[-1]), None, h_array, size)
+            hb.delete_buffer_entries(int(args[-1]), None)
         else:
-            h_array = history.del_history_entries(int(args[1]), int(args[2]), h_array, size)
+            hb.delete_buffer_entries(int(args[1]), int(args[2]))
     elif isinstance(int(args[0]), int):
-        history.print_history(int(args[0]), h_array)
+        hb.print_buff(int(args[0]))
     else:
         print(f"Invalid history command: `{command}`")
-        return (1, h_array)
-    return (0, h_array)
+        return (1, hb)
+    return (0, hb)
 
 
 def run_echo_command(command: str, last_exit_status: int) -> int:
