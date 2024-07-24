@@ -19,7 +19,7 @@ import platform
 import time
 import re
 import tomllib
-from typing import Optional
+from typing import Any
 
 
 # prompt_toolkit imports
@@ -76,13 +76,13 @@ else:
     style = Style.from_dict({'': '#dddddd'})
 
 # Used for tab completion
-def _get_files() -> list:
+def _get_files() -> list[str]:
     files = glob.glob('*')
     files.sort()
     return files
 
 
-def _get_prompt(p: str) -> Optional[list[tuple]|str]:
+def _get_prompt(p: str) -> Any:
     """ Returns a prompt to the prompt session """
     if USRPROMT:
         local_vars: dict[str,str] = {}
@@ -91,27 +91,13 @@ def _get_prompt(p: str) -> Optional[list[tuple]|str]:
     return p
 
 
-def count_lines(fname: str) -> int:
-    """ Count and return lines in a file """
-    def _make_gen(reader):
-        while True:
-            b = reader(2 ** 16)
-            if not b:
-                break
-            yield b
-
-    with open(fname, "rb") as fp:
-        count = sum(buf.count(b"\n") for buf in _make_gen(fp.raw.read))
-    return count
-
-
-def contains_glob(command):
+def contains_glob(command: str) -> bool:
     """ Simple regex to see if a command is likely to have shell globbing """
     glob_pattern = re.compile(r'[*?\[\]]')
     return bool(glob_pattern.search(command))
 
 
-def mainloop():
+def mainloop() -> int:
     """ The main loop and command dispatcher """
     print(f"pish version {VERSION} written by Darren Kirby")
     last_exit_status = 0
@@ -121,17 +107,17 @@ def mainloop():
     # Start shell in home directory
     os.chdir(HOME)
 
-    session = PromptSession(lexer=PygmentsLexer(BashLexer))
+    session: Any = PromptSession(lexer=PygmentsLexer(BashLexer))
     # Start infinite loop and run until `quit` command
     # or <ctrl-c> is trapped.
     while True:
         try:
-            command = session.prompt(_get_prompt(PROMPT),
+            command = session.prompt(message=_get_prompt(PROMPT),
                                      enable_history_search=True,
                                      style=style,
                                      completer=WordCompleter(_get_files()),
-                                     complete_style=CompleteStyle.READLINE_LIKE,
-            )
+                                     complete_style=CompleteStyle.READLINE_LIKE)
+
             # Write the history buffer
             # to file before bailing
             if command in ("quit"):
@@ -195,7 +181,7 @@ def mainloop():
                 last_exit_status = runners.run_command(command)
 
         except KeyboardInterrupt:
-            history.write_history_file(h_array, HISTFILE)
+            hb.write_to_file(hb.histfile)
             sys.exit(0)
 
     return last_exit_status

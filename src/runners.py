@@ -7,7 +7,6 @@ import sys
 import os
 import subprocess
 import shlex
-from typing import Deque
 
 #import history
 from historybuff import HistoryBuff
