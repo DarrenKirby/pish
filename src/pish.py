@@ -29,6 +29,7 @@ from prompt_toolkit.lexers import PygmentsLexer
 from prompt_toolkit.shortcuts import set_title
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.shortcuts import CompleteStyle
+from prompt_toolkit.history import InMemoryHistory
 from pygments.lexers.shell import BashLexer
 
 # Local imports
@@ -107,7 +108,7 @@ def mainloop() -> int:
     # Start shell in home directory
     os.chdir(HOME)
 
-    session: Any = PromptSession(lexer=PygmentsLexer(BashLexer))
+    session: Any = PromptSession(lexer=PygmentsLexer(BashLexer), history=InMemoryHistory(hb.buff))
     # Start infinite loop and run until `quit` command
     # or <ctrl-c> is trapped.
     while True:
@@ -146,8 +147,9 @@ def mainloop() -> int:
             # The previous functions are not mutually-exclusive
             # The following are:
 
-            if command.startswith('history'):
-                last_exit_status, hb = runners.run_history_command(command, hb)
+            # `!` history commands
+            if command.startswith('!') or command.count('!!') > 0:
+                last_exit_status, hb = runners.run_bang_command(command, hb)
 
             # pipe/AND/OR linked commands
             elif "||" in command:
@@ -163,6 +165,9 @@ def mainloop() -> int:
             elif ">" in command:
                 last_exit_status = runners.run_redirect_command(command)
 
+            # history builtin
+            elif command.startswith('history'):
+                last_exit_status, hb = runners.run_history_command(command, hb)
             # echo builtin
             elif command.startswith('echo'):
                 last_exit_status = runners.run_echo_command(command, last_exit_status)
@@ -171,8 +176,12 @@ def mainloop() -> int:
                 if len(command.split()[1:]) == 0:
                     os.chdir(HOME)
                 else:
-                    os.chdir(" ".join(command.split()[1:]))
+                    try:
+                        os.chdir(" ".join(command.split()[1:]))
+                    except (FileNotFoundError, PermissionError, NotADirectoryError) as err:
+                        print(err)
                 last_exit_status = 0
+
             # Check for shell globbing
             elif contains_glob(command):
                 last_exit_status = runners.run_glob_command(command)
