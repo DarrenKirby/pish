@@ -8,12 +8,28 @@ import os
 import subprocess
 import shlex
 
-#import history
 from historybuff import HistoryBuff
+
+def run_bang_command(command: str, hb: HistoryBuff) -> tuple[int, HistoryBuff]:
+    """ Dispatcher for 'bang' history commands """
+
+    if command.count("!!") > 0:
+        cmd = command.replace('!!', hb.buff[-2])
+    else:
+        cmd_to_run = int(command.strip("!").strip())
+        cmd = hb.buff[cmd_to_run - 1]
+
+    print(cmd)
+    es = run_command(cmd)
+
+    # Replace the `!` command with its expansion in history
+    hb.buff[-1] = cmd
+    return (es, hb)
 
 
 def run_history_command(command: str, hb: HistoryBuff) -> tuple[int, HistoryBuff]:
     """ Dispatcher for `history` commands """
+
     args = command.split()[1:]
     if len(args) == 0:
         hb.print_buff(0)
