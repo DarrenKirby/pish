@@ -39,12 +39,18 @@ class HistoryBuff():
             return False
         return True
 
-    def write_to_file(self, fname: str) -> bool:
+    def write_to_file(self, fname: str, append: bool = False) -> bool:
         """ Writes the current history buffer to fname """
         try:
-            with open(fname, "w", encoding="UTF-8") as fp:
-                for line in self.buff:
-                    fp.write(line + '\n')
+            if not append:
+                with open(fname, "w", encoding="UTF-8") as fp:
+                    for line in self.buff:
+                        fp.write(line + '\n')
+            else:
+                with open(fname, "a", encoding="UTF-8") as fp:
+                    for line in self.buff:
+                        fp.write(line + '\n')
+
             fp.close()
             return True
         except IOError as e:
