@@ -2,6 +2,8 @@
 
 Similar to bash, but without the shell scripting parts (yet).
 
+Requires Python 3.6 or better.
+
 Implemented so far:
  * `echo $HOME` will output value of envvars, `echo $?` is last exit status, `echo ??` is pid of shell.
  * arbitrary piped commands work ie: `cat foo.txt | sort | uniq`
