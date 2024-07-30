@@ -10,6 +10,44 @@ import shlex
 
 from historybuff import HistoryBuff
 
+
+def _del_alias(alias_list: list, aliases: dict) -> dict:
+    try:
+        for alias in alias_list:
+            del aliases[alias]
+    except KeyError:
+        print(f"{alias} is not defined")
+    return aliases
+
+def _print_alias(aliases: dict) -> None:
+    for k, v in aliases.items():
+        print(f"alias {k}={v}")
+
+def _add_alias(alias_str: str, aliases: dict) -> dict:
+    cmd, alias = alias_str.split('=')
+    aliases[cmd] = alias
+    return aliases
+
+
+def run_alias_command(command: str, aliases: dict) -> tuple[int,dict]:
+    """ Get, set, and unset shell aliases """
+    args = shlex.split(command)
+
+    if len(args) == 1:
+        _print_alias(aliases)
+
+    elif args[0] in 'alias':
+        if args[1] == '-p':
+            _print_alias(aliases)
+        else:
+            aliases = _add_alias(args[1], aliases)
+
+    else:
+        aliases = _del_alias(args[1:], aliases)
+
+    return (0, aliases)
+
+
 def run_bang_command(command: str, hb: HistoryBuff) -> tuple[int, HistoryBuff]:
     """ Dispatcher for 'bang' history commands """
 

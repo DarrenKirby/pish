@@ -38,7 +38,7 @@ import runners
 from historybuff import HistoryBuff
 
 
-# Set up globals
+# Set up constants
 VERSION = '0.0.6'
 DEFAULT_PROMPT = f"[{os.getlogin()}@{platform.node()}]$ "
 HOME = os.path.expanduser("~")
@@ -59,6 +59,7 @@ if 'histfile' in data:
     HISTFILE = data['histfile']
 else:
     HISTFILE = HOME + "/.pish_history"
+
 if 'histsize' in data:
     HISTSIZE = data['histsize']
 else:
@@ -70,11 +71,18 @@ if 'prompt' in data:
     PROMPT = f"{' '.join(data['prompt'].split())}"
 else:
     PROMPT = DEFAULT_PROMPT
+
 # Retrive prompt style from config file
 if 'style' in data:
     style = Style.from_dict(data['style'])
 else:
     style = Style.from_dict({'': '#dddddd'})
+
+# Load shell aliases
+if 'alias' in data:
+    ALIASES = data['alias']
+else:
+    ALIASES = {}
 
 # Used for tab completion
 def _get_files() -> list[str]:
@@ -98,7 +106,7 @@ def contains_glob(command: str) -> bool:
     return bool(glob_pattern.search(command))
 
 
-def mainloop() -> int:
+def mainloop(alias_dict: dict) -> int:
     """ The main loop and command dispatcher """
     print(f"pish version {VERSION} written by Darren Kirby")
     last_exit_status = 0
@@ -134,15 +142,23 @@ def mainloop() -> int:
                 hb.append(command)
             # ...now strip the space
             command = command.strip()
+
+            # !!!
             # For colour output. Prolly shouldn't be hard-coded here
             # but it's for my own preference. Will likely stay until
             # I implement aliases
-            if command.startswith('ls'):
-                command = 'ls -G --color' + command[2:]
+            #if command.startswith('ls'):
+            #    command = 'ls -G --color' + command[2:]
 
             # If command is empty we just print a new prompt
             if command == '':
                 continue
+
+            # Check if the command is an alias
+            if command.split()[0] in alias_dict.keys():
+                cmd = command.split()
+                cmd[0] = alias_dict[cmd[0]]
+                command = " ".join(cmd)
 
             # The previous functions are not mutually-exclusive
             # The following are:
@@ -150,6 +166,10 @@ def mainloop() -> int:
             # `!` history commands
             if command.startswith('!') or command.count('!!') > 0:
                 last_exit_status, hb = runners.run_bang_command(command, hb)
+
+            # Print, set, and unset shell aliases
+            elif command.startswith('alias') or command.startswith('unalias'):
+                last_exit_status, alias_dict = runners.run_alias_command(command, alias_dict)
 
             # pipe/AND/OR linked commands
             elif "||" in command:
@@ -198,4 +218,4 @@ def mainloop() -> int:
 
 if __name__ == '__main__':
     set_title(f"pish version {VERSION}")
-    exit_status = mainloop()
+    exit_status = mainloop(ALIASES)
