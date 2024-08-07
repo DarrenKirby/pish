@@ -143,13 +143,6 @@ def mainloop(alias_dict: dict) -> int:
             # ...now strip the space
             command = command.strip()
 
-            # !!!
-            # For colour output. Prolly shouldn't be hard-coded here
-            # but it's for my own preference. Will likely stay until
-            # I implement aliases
-            #if command.startswith('ls'):
-            #    command = 'ls -G --color' + command[2:]
-
             # If command is empty we just print a new prompt
             if command == '':
                 continue
