@@ -20,6 +20,11 @@ class HistoryBuff():
     def __repr__(self) -> str:
         return f"HistoryBuff(buffsize={self.buffsize}, histfile={self.histfile})"
 
+    def search_buffer(self, command: str) -> str:
+        for cmd in self.buff[::-1]:
+            if cmd.startswith(command):
+                return cmd
+
     def load_from_file(self, fname: str) -> bool:
         """ Loads a history file into the buffer """
         if not os.path.exists(fname):
@@ -91,6 +96,6 @@ class HistoryBuff():
     def delete_buffer_entries(self, start: int, end: Optional[int]) -> None:
         """ deletes a single, or range of entries from the buffer """
         if end is None:
-            del self.buff[start - 1]
+            del self.buff[start-2]
         else:
-            del self.buff[start-1:end]
+            del self.buff[start-2:end-1]
