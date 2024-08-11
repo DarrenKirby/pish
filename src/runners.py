@@ -7,6 +7,7 @@ import sys
 import os
 import subprocess
 import shlex
+from string import ascii_letters
 
 from historybuff import HistoryBuff
 
@@ -53,6 +54,8 @@ def run_bang_command(command: str, hb: HistoryBuff) -> tuple[int, HistoryBuff]:
 
     if command.count("!!") > 0:
         cmd = command.replace('!!', hb.buff[-2])
+    elif command[1] in ascii_letters:
+        cmd = hb.search_buffer(command[1:])
     else:
         cmd_to_run = int(command.strip("!").strip())
         cmd = hb.buff[cmd_to_run - 1]
