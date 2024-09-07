@@ -34,12 +34,11 @@ from pygments.lexers.shell import BashLexer
 
 # Local imports
 import runners
-#import history
 from historybuff import HistoryBuff
 
 
 # Set up constants
-VERSION = '0.0.6'
+VERSION = '0.0.7'
 DEFAULT_PROMPT = f"[{os.getlogin()}@{platform.node()}]$ "
 HOME = os.path.expanduser("~")
 CONFFILE = HOME + "/.pishrc"
@@ -49,7 +48,7 @@ USRPROMT = False
 assert time
 
 # Parse config file, and set vars
-data={}
+data = {}
 if os.path.exists(CONFFILE):
     with open(CONFFILE, "rb") as f:
         data = tomllib.load(f)
@@ -67,7 +66,7 @@ else:
 
 # Retrieve prompt from config file
 if 'prompt' in data:
-    USRPROMT= True
+    USRPROMT = True
     PROMPT = f"{' '.join(data['prompt'].split())}"
 else:
     PROMPT = DEFAULT_PROMPT
@@ -84,6 +83,7 @@ if 'alias' in data:
 else:
     ALIASES = {}
 
+
 # Used for tab completion
 def _get_files() -> list[str]:
     files = glob.glob('*')
@@ -94,7 +94,8 @@ def _get_files() -> list[str]:
 def _get_prompt(p: str) -> Any:
     """ Returns a prompt to the prompt session """
     if USRPROMT:
-        local_vars: dict[str,str] = {}
+        local_vars: dict[str, str] = {}
+        # pylint: disable-next=exec-used
         exec('prompt = ' + p, globals(), local_vars)
         return local_vars['prompt']
     return p
@@ -106,6 +107,53 @@ def contains_glob(command: str) -> bool:
     return bool(glob_pattern.search(command))
 
 
+def dispatch_redirect(command: str) -> int:
+    """ Dispatcher for I/O redirected commands """
+    if ">>" in command:
+        last_exit_status = runners.run_append_command(command)
+    else:
+        last_exit_status = runners.run_redirect_command(command)
+    return last_exit_status
+
+
+def dispatch_shell_builtin(command: str,
+                           hb: HistoryBuff,
+                           last_exit_status: int,
+                           alias_dict: dict,
+                           ) -> int:
+    """ Dispatcher for commands that are shell builtins """
+    # history builtin
+    if command.startswith('history'):
+        last_exit_status, hb = runners.run_history_command(command, hb)
+    # echo builtin
+    elif command.startswith('echo'):
+        last_exit_status = runners.run_echo_command(command, last_exit_status)
+    elif command.startswith('alias') or command.startswith('unalias'):
+        last_exit_status, alias_dict = runners.run_alias_command(command, alias_dict)
+    # cd builtin
+    elif command.startswith('cd'):
+        if len(command.split()[1:]) == 0:
+            os.chdir(HOME)
+        else:
+            try:
+                os.chdir(" ".join(command.split()[1:]))
+            except (FileNotFoundError, PermissionError, NotADirectoryError) as err:
+                print(err)
+        last_exit_status = 0
+    return last_exit_status
+
+
+def dispatch_pipe_logical(command: str) -> int:
+    """  Dispatcher for pipe and logical condition commands  """
+    if "||" in command:
+        last_exit_status = runners.run_or_command(command)
+    elif "|" in command:
+        last_exit_status = runners.run_pipe_command(command)
+    else:
+        last_exit_status = runners.run_and_command(command)
+    return last_exit_status
+
+
 def mainloop(alias_dict: dict) -> int:
     """ The main loop and command dispatcher """
     print(f"pish version {VERSION} written by Darren Kirby")
@@ -113,6 +161,7 @@ def mainloop(alias_dict: dict) -> int:
     # Initialize the history buffer
     hb = HistoryBuff(HISTSIZE, HISTFILE)
     hb.load_from_file(hb.histfile)
+
     # Start shell in home directory
     os.chdir(HOME)
 
@@ -160,40 +209,17 @@ def mainloop(alias_dict: dict) -> int:
             if command.startswith('!') or command.count('!!') > 0:
                 last_exit_status, hb = runners.run_bang_command(command, hb)
 
-            # Print, set, and unset shell aliases
-            elif command.startswith('alias') or command.startswith('unalias'):
-                last_exit_status, alias_dict = runners.run_alias_command(command, alias_dict)
-
             # pipe/AND/OR linked commands
-            elif "||" in command:
-                last_exit_status = runners.run_or_command(command)
-            elif "|" in command:
-                last_exit_status = runners.run_pipe_command(command)
-            elif "&&" in command:
-                last_exit_status = runners.run_and_command(command)
+            elif "|" in command or "&" in command:
+                last_exit_status = dispatch_pipe_logical(command)
 
             # Commands with redirected IO
-            elif ">>" in command:
-                last_exit_status = runners.run_append_command(command)
             elif ">" in command:
-                last_exit_status = runners.run_redirect_command(command)
+                last_exit_status = dispatch_redirect(command)
 
-            # history builtin
-            elif command.startswith('history'):
-                last_exit_status, hb = runners.run_history_command(command, hb)
-            # echo builtin
-            elif command.startswith('echo'):
-                last_exit_status = runners.run_echo_command(command, last_exit_status)
-            # cd builtin
-            elif command.startswith('cd'):
-                if len(command.split()[1:]) == 0:
-                    os.chdir(HOME)
-                else:
-                    try:
-                        os.chdir(" ".join(command.split()[1:]))
-                    except (FileNotFoundError, PermissionError, NotADirectoryError) as err:
-                        print(err)
-                last_exit_status = 0
+            # Shell 'builtins'
+            elif command.split()[0] in {'history', 'echo', 'cd', 'alias', 'unalias'}:
+                last_exit_status = dispatch_shell_builtin(command, hb, last_exit_status, alias_dict)
 
             # Check for shell globbing
             elif contains_glob(command):
@@ -202,7 +228,7 @@ def mainloop(alias_dict: dict) -> int:
             else:
                 last_exit_status = runners.run_command(command)
 
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, EOFError):
             hb.write_to_file(hb.histfile)
             sys.exit(0)
 
