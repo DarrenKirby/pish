@@ -3,6 +3,7 @@
 import os
 from typing import Optional
 
+
 class HistoryBuff():
     """ HistoryBuff()
 
@@ -21,9 +22,11 @@ class HistoryBuff():
         return f"HistoryBuff(buffsize={self.buffsize}, histfile={self.histfile})"
 
     def search_buffer(self, command: str) -> str:
+        """ Searched the buffer fora command """
         for cmd in self.buff[::-1]:
             if cmd.startswith(command):
                 return cmd
+        return ""
 
     def load_from_file(self, fname: str) -> bool:
         """ Loads a history file into the buffer """
@@ -47,14 +50,17 @@ class HistoryBuff():
     def write_to_file(self, fname: str, append: bool = False) -> bool:
         """ Writes the current history buffer to fname """
         try:
-            if not append:
-                with open(fname, "w", encoding="UTF-8") as fp:
-                    for line in self.buff:
-                        fp.write(line + '\n')
-            else:
-                with open(fname, "a", encoding="UTF-8") as fp:
-                    for line in self.buff:
-                        fp.write(line + '\n')
+            with open(fname, "a" if append else "w", encoding="UTF-8") as fp:
+                for line in self.buff:
+                    fp.write(line + '\n')
+            # if not append:
+            #     with open(fname, "w", encoding="UTF-8") as fp:
+            #         for line in self.buff:
+            #             fp.write(line + '\n')
+            # else:
+            #     with open(fname, "a", encoding="UTF-8") as fp:
+            #         for line in self.buff:
+            #             fp.write(line + '\n')
 
             fp.close()
             return True
