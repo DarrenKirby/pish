@@ -20,9 +20,11 @@ def _del_alias(alias_list: list, aliases: dict) -> dict:
         print(f"{alias} is not defined")
     return aliases
 
+
 def _print_alias(aliases: dict) -> None:
     for k, v in aliases.items():
         print(f"alias {k}={v}")
+
 
 def _add_alias(alias_str: str, aliases: dict) -> dict:
     cmd, alias = alias_str.split('=')
@@ -30,7 +32,7 @@ def _add_alias(alias_str: str, aliases: dict) -> dict:
     return aliases
 
 
-def run_alias_command(command: str, aliases: dict) -> tuple[int,dict]:
+def run_alias_command(command: str, aliases: dict) -> tuple[int, dict]:
     """ Get, set, and unset shell aliases """
     args = shlex.split(command)
 
@@ -79,18 +81,19 @@ def run_history_command(command: str, hb: HistoryBuff) -> tuple[int, HistoryBuff
         hb.clear()
 
     elif args[0] == '-w':
-        if not args[1]:
+        if len(args) == 1:
             hb.write_to_file(hb.histfile)
         else:
             hb.write_to_file(args[1])
 
     elif args[0] == '-a':
-        if not args[1]:
+        if len(args) == 1:
             hb.write_to_file(hb.histfile, append=True)
         else:
             hb.write_to_file(args[1], append=True)
 
     elif args[0] == '-d':
+        if len(args) == 1
         if len(args) == 2:
             hb.delete_buffer_entries(int(args[-1]), None)
         else:
@@ -229,7 +232,8 @@ def run_command(command: str) -> int:
         print(f"Command: `{cmd[0]}` not found")
         return 127  # `command not found`
 
+
 def run_glob_command(command: str) -> int:
     """ Run commands with glob expansions """
     print("Found a glob!")
-    return 0
+    return run_command(command)
