@@ -93,7 +93,8 @@ def run_history_command(command: str, hb: HistoryBuff) -> tuple[int, HistoryBuff
             hb.write_to_file(args[1], append=True)
 
     elif args[0] == '-d':
-        if len(args) == 1
+        if len(args) == 1:
+            pass
         if len(args) == 2:
             hb.delete_buffer_entries(int(args[-1]), None)
         else:
