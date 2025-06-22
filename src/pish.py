@@ -156,7 +156,7 @@ def dispatch_pipe_logical(command: str) -> int:
 
 def mainloop(alias_dict: dict) -> int:
     """ The main loop and command dispatcher """
-    print(f"pish version {VERSION} written by Darren Kirby")
+    print(f"pish version {VERSION}")
     last_exit_status = 0
     # Initialize the history buffer
     hb = HistoryBuff(HISTSIZE, HISTFILE)
