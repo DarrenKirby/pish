@@ -53,14 +53,6 @@ class HistoryBuff():
             with open(fname, "a" if append else "w", encoding="UTF-8") as fp:
                 for line in self.buff:
                     fp.write(line + '\n')
-            # if not append:
-            #     with open(fname, "w", encoding="UTF-8") as fp:
-            #         for line in self.buff:
-            #             fp.write(line + '\n')
-            # else:
-            #     with open(fname, "a", encoding="UTF-8") as fp:
-            #         for line in self.buff:
-            #             fp.write(line + '\n')
 
             fp.close()
             return True
