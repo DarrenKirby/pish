@@ -102,9 +102,34 @@ def _get_prompt(p: str) -> Any:
 
 
 def contains_glob(command: str) -> bool:
-    """ Simple regex to see if a command is likely to have shell globbing """
-    glob_pattern = re.compile(r'[*?\[\]]')
-    return bool(glob_pattern.search(command))
+    """ Check if a command contains shell globbing patterns 
+    
+    This function checks for:
+    - * : matches zero or more characters
+    - ? : matches single character
+    - [...] : character sets/ranges
+    - {...} : brace expansion (e.g., {a,b,c})
+    
+    It avoids false positives by:
+    - Ignoring patterns inside quotes
+    - Ignoring escaped special characters
+    """
+    # First, remove quoted strings to avoid false positives
+    # This handles both single and double quotes
+    temp_command = command
+    
+    # Remove double-quoted strings
+    temp_command = re.sub(r'"[^"]*"', '', temp_command)
+    # Remove single-quoted strings  
+    temp_command = re.sub(r"'[^']*'", '', temp_command)
+    
+    # Remove escaped characters (e.g., \* \? \[)
+    temp_command = re.sub(r'\\.', '', temp_command)
+    
+    # Now check for glob patterns in the remaining string
+    # This matches *, ?, [...], and {...}
+    glob_pattern = re.compile(r'[*?]|\[[^\]]*\]|\{[^}]*\}')
+    return bool(glob_pattern.search(temp_command))
 
 
 def dispatch_redirect(command: str) -> int:
@@ -209,6 +234,10 @@ def mainloop(alias_dict: dict) -> int:
             if command.startswith('!') or command.count('!!') > 0:
                 last_exit_status, hb = runners.run_bang_command(command, hb)
 
+            # Check for shell globbing
+            elif contains_glob(command):
+                last_exit_status = runners.run_glob_command(command, last_exit_status)
+
             # pipe/AND/OR linked commands
             elif "|" in command or "&" in command:
                 last_exit_status = dispatch_pipe_logical(command)
@@ -221,9 +250,6 @@ def mainloop(alias_dict: dict) -> int:
             elif command.split()[0] in {'history', 'echo', 'cd', 'alias', 'unalias'}:
                 last_exit_status = dispatch_shell_builtin(command, hb, last_exit_status, alias_dict)
 
-            # Check for shell globbing
-            elif contains_glob(command):
-                last_exit_status = runners.run_glob_command(command)
             # Regular command
             else:
                 last_exit_status = runners.run_command(command)

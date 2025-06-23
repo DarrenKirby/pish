@@ -7,6 +7,7 @@ import sys
 import os
 import subprocess
 import shlex
+import glob
 from string import ascii_letters
 
 from historybuff import HistoryBuff
@@ -234,7 +235,132 @@ def run_command(command: str) -> int:
         return 127  # `command not found`
 
 
-def run_glob_command(command: str) -> int:
-    """ Run commands with glob expansions """
-    print("Found a glob!")
-    return run_command(command)
+def run_glob_command(command: str, last_exit_status: int) -> int:
+    """ Run commands with glob expansions 
+    
+    This function:
+    1. Parses the command to identify glob patterns
+    2. Expands the globs to actual filenames
+    3. Reconstructs the command with expanded filenames
+    4. Runs the command normally
+    """
+    try:
+        # Parse the command while preserving quotes
+        parts = shlex.split(command)
+        expanded_parts = []
+        
+        for part in parts:
+            # Check if this part contains glob patterns
+            # We need to check the original part, not quoted version
+            if any(c in part for c in ['*', '?', '[', ']', '{', '}']):
+                # Handle brace expansion first if present
+                if '{' in part and '}' in part:
+                    expanded_braces = expand_braces(part)
+                    for brace_expanded in expanded_braces:
+                        # Now apply glob expansion to each brace-expanded result
+                        matches = glob.glob(brace_expanded)
+                        if matches:
+                            expanded_parts.extend(sorted(matches))
+                        else:
+                            # If no matches, keep the pattern as-is (bash behavior)
+                            expanded_parts.append(brace_expanded)
+                else:
+                    # Regular glob expansion
+                    matches = glob.glob(part)
+                    if matches:
+                        # Sort for consistent output
+                        expanded_parts.extend(sorted(matches))
+                    else:
+                        # If no matches, keep the pattern as-is (bash behavior)
+                        expanded_parts.append(part)
+            else:
+                # No glob pattern, keep as is
+                expanded_parts.append(part)
+        
+        # Reconstruct the command with expanded parts
+        # We need to properly quote parts that contain spaces
+        quoted_parts = []
+        for part in expanded_parts:
+            if ' ' in part or '\t' in part:
+                # Quote parts with spaces
+                quoted_parts.append(shlex.quote(part))
+            else:
+                quoted_parts.append(part)
+
+        expanded_command = ' '.join(quoted_parts)
+
+        # Check if it is an echo command
+        if expanded_command[0:4] == 'echo':
+            return run_echo_command(expanded_command, last_exit_status)
+
+        # Run the expanded command
+        return run_command(expanded_command)
+        
+    except Exception as e:
+        print(f"Error in glob expansion: {e}")
+        # Fall back to running command as-is
+        return run_command(command)
+
+
+def expand_braces(pattern: str) -> list[str]:
+    """ Expand brace patterns like {a,b,c} or {1..5}
+    
+    This is a simple implementation that handles:
+    - Comma-separated values: {a,b,c} -> ['a', 'b', 'c']  
+    - Simple ranges: {1..5} -> ['1', '2', '3', '4', '5']
+    """
+    results = []
+    
+    # Find brace expressions
+    start = pattern.find('{')
+    end = pattern.find('}', start)
+    
+    if start == -1 or end == -1:
+        return [pattern]
+    
+    prefix = pattern[:start]
+    suffix = pattern[end + 1:]
+    content = pattern[start + 1:end]
+    
+    # Check for range pattern (e.g., 1..5 or a..z)
+    if '..' in content:
+        parts = content.split('..')
+        if len(parts) == 2:
+            try:
+                # Try numeric range
+                start_num = int(parts[0])
+                end_num = int(parts[1])
+                if start_num <= end_num:
+                    for i in range(start_num, end_num + 1):
+                        results.append(f"{prefix}{i}{suffix}")
+                else:
+                    for i in range(start_num, end_num - 1, -1):
+                        results.append(f"{prefix}{i}{suffix}")
+            except ValueError:
+                # Try character range
+                if len(parts[0]) == 1 and len(parts[1]) == 1:
+                    start_char = ord(parts[0])
+                    end_char = ord(parts[1])
+                    if start_char <= end_char:
+                        for i in range(start_char, end_char + 1):
+                            results.append(f"{prefix}{chr(i)}{suffix}")
+                    else:
+                        for i in range(start_char, end_char - 1, -1):
+                            results.append(f"{prefix}{chr(i)}{suffix}")
+                else:
+                    # Not a valid range, treat as comma-separated
+                    results.append(pattern)
+    else:
+        # Comma-separated values
+        for item in content.split(','):
+            results.append(f"{prefix}{item.strip()}{suffix}")
+    
+    # Handle nested braces recursively if needed
+    expanded_results = []
+    for result in results:
+        if '{' in result and '}' in result:
+            expanded_results.extend(expand_braces(result))
+        else:
+            expanded_results.append(result)
+    
+    return expanded_results if expanded_results else [pattern]

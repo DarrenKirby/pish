@@ -94,8 +94,7 @@ class HistoryBuff():
         else:
             line_count = (len(self.buff) - lines_to_print) + 1
             while lines_to_print > 0:
-                print(f"{line_count:>{line_number_width}}  {self.buff[len(self.buff)
-                                                                      - lines_to_print]}")
+                print(f"{line_count:>{line_number_width}}  {self.buff[len(self.buff) - lines_to_print]}")
                 lines_to_print -= 1
                 line_count += 1
 

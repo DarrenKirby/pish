@@ -14,7 +14,8 @@ Implemented so far:
  * Preface sensitive commands with a space to prevent writing to the history buffer.
  * rudimentary tab completion. Only works in PWD so far...
  * Customizable prompts, though this is currently crufty.
- * `~/.pishrc` configuration file for prompt/prompt style, histfile and histsize
+ * `~/.pishrc` configuration file for prompt/prompt style, histfile and histsize.
+ * Shell globbing: works as expected with `*`, `?`, `[abc]`, `[a-z]`, `{1,2,3}` and `{5..1}`.  
 
 My eventual plan is to wrap this with `prompt_toolkit` and make it a full-screen term app so it does
 not need to run or be started fromm another shell.
