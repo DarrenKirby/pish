@@ -1,10 +1,39 @@
-# Byte-compiled / optimized / DLL files
+# mypy
+.mypy_cache/
+
+# Byte-compiled / optimized / compiled files
 __pycache__/
 *.py[cod]
 *$py.class
 
+# C extensions
+*.so
 
-# mypy
-.mypy_cache/
+# Distribution / packaging
+.Python
+build/
+dist/
+eggs/
+*.egg
+*.egg-info/
 
+# Virtual environment
+.env/
+venv/
+env/
 
+# Editors
+.idea/
+.vscode/
+
+# Logs and temporary files
+*.log
+tmp/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Sensitive information
+.env
+config.ini
