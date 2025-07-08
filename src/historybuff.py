@@ -1,15 +1,18 @@
-""" historybuff.py """
+"""
+historybuff.py - a ring buffer which represents shell history.
+"""
 
 import os
 from typing import Optional
 
 
-class HistoryBuff():
+class HistoryBuff:
     """ HistoryBuff()
 
         A datatype that implements a shell history buffer, and the methods
         for acting upon it.
     """
+
     def __init__(self, buffsize: int, histfile: str):
         self.buffsize = buffsize
         self.histfile = histfile
@@ -22,7 +25,7 @@ class HistoryBuff():
         return f"HistoryBuff(buffsize={self.buffsize}, histfile={self.histfile})"
 
     def search_buffer(self, command: str) -> str:
-        """ Searched the buffer fora command """
+        """ Searched the buffer for a command """
         for cmd in self.buff[::-1]:
             if cmd.startswith(command):
                 return cmd
@@ -91,8 +94,14 @@ class HistoryBuff():
                 line_count += 1
 
     def delete_buffer_entries(self, start: int, end: Optional[int]) -> None:
-        """ deletes a single, or range of entries from the buffer """
+        """ deletes a single, or range of entries from the buffer
+
+        The seemingly odd indexing here is because (like bash), pish writes commands
+        to the history file _before_ running them. So if the current command is to
+        delete the `most recent` command from the history, that command will be the
+        second oldest by time this code gets there to delete it.
+        """
         if end is None:
-            del self.buff[start-2]
+            del self.buff[start - 2]
         else:
-            del self.buff[start-2:end-1]
+            del self.buff[start - 2:end - 1]
