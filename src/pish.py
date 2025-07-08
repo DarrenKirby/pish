@@ -1,266 +1,116 @@
 """ pish - the python idiot shell
 
- Similar to bash, but without the shell scripting parts.
- Implemented so far:
- * `echo $HOME` will output value of envvars
- * `cd`
- * arbitrary piped commands work ie: `cat foo.txt | sort | uniq`
- * arbitrary `&&` commands work ie: `./configure && make && make install`
- * arbitrary `||` commands work ie: `mount -l || cat /etc/mtab || cat /proc/mounts`
- * STDOUT redirection works ie: `df -h > df.txt` or `ifconfig >> netlog.txt`
+Similar to bash, but without the shell scripting parts.
+Implemented so far:
+* `echo $HOME` will output value of envvars, `echo $?` is last exit status, `echo ??` is pid of shell.
+* arbitrary piped commands work ie: `cat foo.txt | sort | uniq`
+* arbitrary `&&` commands work ie: `./configure && make && make install`
+* arbitrary `||` commands work ie: `mount-l || cat /etc/mtab || cat /proc/mounts`
+* STDOUT redirection works ie: `df -h > df.txt` or `ifconfig >> netlog.txt`
+* `histsize` history buffer that is read/written to `histfile`.
+* Preface sensitive commands with a space to prevent writing to the history buffer.
+* rudimentary tab completion. Only works in PWD so far...
+* Customizable prompts, though this is currently crufty.
+* `~/.pishrc` configuration file for prompt/prompt style, histfile and histsize.
+* Shell globbing: works as expected with `*`, `?`, `[abc]`, `[a-z]`, `{1,2,3}` and `{5..1}`.
 """
 
-# Standard lib imports
 import sys
 import os
-import os.path
-import glob
-import platform
-import time
-import re
-import tomllib
 from typing import Any
 
-
-# prompt_toolkit imports
+# prompt_toolkit/pygments imports
 from prompt_toolkit import PromptSession
-from prompt_toolkit.styles import Style
 from prompt_toolkit.lexers import PygmentsLexer
 from prompt_toolkit.shortcuts import set_title
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.shortcuts import CompleteStyle
 from prompt_toolkit.history import InMemoryHistory
-from pygments.lexers.shell import BashLexer
+from pygments.lexers import BashLexer
 
 # Local imports
-import runners
+from config import PishConfig
+from parser import CommandParser
+from runners import CommandRunner
+from dispatcher import CommandDispatcher
 from historybuff import HistoryBuff
-
+from utils import get_files
 
 # Set up constants
 VERSION = '0.0.7'
-DEFAULT_PROMPT = f"[{os.getlogin()}@{platform.node()}]$ "
-HOME = os.path.expanduser("~")
-CONFFILE = HOME + "/.pishrc"
-USRPROMT = False
-
-# Dirty hack to appease pylint
-assert time
-
-# Parse config file, and set vars
-data = {}
-if os.path.exists(CONFFILE):
-    with open(CONFFILE, "rb") as f:
-        data = tomllib.load(f)
-
-# History-related settings
-if 'histfile' in data:
-    HISTFILE = data['histfile']
-else:
-    HISTFILE = HOME + "/.pish_history"
-
-if 'histsize' in data:
-    HISTSIZE = data['histsize']
-else:
-    HISTSIZE = 500
-
-# Retrieve prompt from config file
-if 'prompt' in data:
-    USRPROMT = True
-    PROMPT = f"{' '.join(data['prompt'].split())}"
-else:
-    PROMPT = DEFAULT_PROMPT
-
-# Retrive prompt style from config file
-if 'style' in data:
-    style = Style.from_dict(data['style'])
-else:
-    style = Style.from_dict({'': '#dddddd'})
-
-# Load shell aliases
-if 'alias' in data:
-    ALIASES = data['alias']
-else:
-    ALIASES = {}
 
 
-# Used for tab completion
-def _get_files() -> list[str]:
-    files = glob.glob('*')
-    files.sort()
-    return files
+class PishShell:
+    """Main shell class that orchestrates all components"""
 
+    def __init__(self):
+        self.config = PishConfig()
+        self.parser = CommandParser()
+        self.runner = CommandRunner()
+        self.dispatcher = CommandDispatcher(self.runner, self.config.home)
+        self.last_exit_status = 0
 
-def _get_prompt(p: str) -> Any:
-    """ Returns a prompt to the prompt session """
-    if USRPROMT:
-        local_vars: dict[str, str] = {}
-        # pylint: disable-next=exec-used
-        exec('prompt = ' + p, globals(), local_vars)
-        return local_vars['prompt']
-    return p
+        # Initialize history buffer
+        self.hb = HistoryBuff(self.config.histsize, self.config.histfile)
+        self.hb.load_from_file(self.hb.histfile)
 
+        # Start shell in home directory
+        os.chdir(self.config.home)
 
-def contains_glob(command: str) -> bool:
-    """ Check if a command contains shell globbing patterns 
-    
-    This function checks for:
-    - * : matches zero or more characters
-    - ? : matches single character
-    - [...] : character sets/ranges
-    - {...} : brace expansion (e.g., {a,b,c})
-    
-    It avoids false positives by:
-    - Ignoring patterns inside quotes
-    - Ignoring escaped special characters
-    """
-    # First, remove quoted strings to avoid false positives
-    # This handles both single and double quotes
-    temp_command = command
-    
-    # Remove double-quoted strings
-    temp_command = re.sub(r'"[^"]*"', '', temp_command)
-    # Remove single-quoted strings  
-    temp_command = re.sub(r"'[^']*'", '', temp_command)
-    
-    # Remove escaped characters (e.g., \* \? \[)
-    temp_command = re.sub(r'\\.', '', temp_command)
-    
-    # Now check for glob patterns in the remaining string
-    # This matches *, ?, [...], and {...}
-    glob_pattern = re.compile(r'[*?]|\[[^\]]*\]|\{[^}]*\}')
-    return bool(glob_pattern.search(temp_command))
+        # Initialize prompt session
+        self.session: Any = PromptSession(
+            lexer=PygmentsLexer(BashLexer),
+            history=InMemoryHistory(self.hb.buff)
+        )
 
+    def run(self) -> None:
+        """Main shell loop"""
+        print(f"pish version {VERSION}")
 
-def dispatch_redirect(command: str) -> int:
-    """ Dispatcher for I/O redirected commands """
-    if ">>" in command:
-        last_exit_status = runners.run_append_command(command)
-    else:
-        last_exit_status = runners.run_redirect_command(command)
-    return last_exit_status
-
-
-def dispatch_shell_builtin(command: str,
-                           hb: HistoryBuff,
-                           last_exit_status: int,
-                           alias_dict: dict,
-                           ) -> int:
-    """ Dispatcher for commands that are shell builtins """
-    # history builtin
-    if command.startswith('history'):
-        last_exit_status, hb = runners.run_history_command(command, hb)
-    # echo builtin
-    elif command.startswith('echo'):
-        last_exit_status = runners.run_echo_command(command, last_exit_status)
-    elif command.startswith('alias') or command.startswith('unalias'):
-        last_exit_status, alias_dict = runners.run_alias_command(command, alias_dict)
-    # cd builtin
-    elif command.startswith('cd'):
-        if len(command.split()[1:]) == 0:
-            os.chdir(HOME)
-        else:
+        while True:
             try:
-                os.chdir(" ".join(command.split()[1:]))
-            except (FileNotFoundError, PermissionError, NotADirectoryError) as err:
-                print(err)
-        last_exit_status = 0
-    return last_exit_status
+                command = self.session.prompt(
+                    message=self.config.get_prompt(self.config.prompt),
+                    enable_history_search=True,
+                    style=self.config.style,
+                    completer=WordCompleter(get_files()),
+                    complete_style=CompleteStyle.READLINE_LIKE
+                )
 
+                # Handle quit command
+                if command in ("quit",):
+                    self.hb.write_to_file(self.config.histfile)
+                    sys.exit(0)
 
-def dispatch_pipe_logical(command: str) -> int:
-    """  Dispatcher for pipe and logical condition commands  """
-    if "||" in command:
-        last_exit_status = runners.run_or_command(command)
-    elif "|" in command:
-        last_exit_status = runners.run_pipe_command(command)
-    else:
-        last_exit_status = runners.run_and_command(command)
-    return last_exit_status
+                # Handle history writing
+                if not command.startswith(" "):
+                    self.hb.append(command)
 
+                # Strip leading space
+                command = command.strip()
 
-def mainloop(alias_dict: dict) -> int:
-    """ The main loop and command dispatcher """
-    print(f"pish version {VERSION}")
-    last_exit_status = 0
-    # Initialize the history buffer
-    hb = HistoryBuff(HISTSIZE, HISTFILE)
-    hb.load_from_file(hb.histfile)
+                # Parse and dispatch command
+                command_type, processed_command = self.parser.parse_command(
+                    command, self.config.aliases
+                )
 
-    # Start shell in home directory
-    os.chdir(HOME)
+                self.last_exit_status, self.hb, self.config.aliases = self.dispatcher.dispatch(
+                    processed_command, command_type, self.hb,
+                    self.last_exit_status, self.config.aliases
+                )
 
-    session: Any = PromptSession(lexer=PygmentsLexer(BashLexer), history=InMemoryHistory(hb.buff))
-    # Start infinite loop and run until `quit` command
-    # or <ctrl-c> is trapped.
-    while True:
-        try:
-            command = session.prompt(message=_get_prompt(PROMPT),
-                                     enable_history_search=True,
-                                     style=style,
-                                     completer=WordCompleter(_get_files()),
-                                     complete_style=CompleteStyle.READLINE_LIKE)
-
-            # Write the history buffer
-            # to file before bailing
-            if command in ("quit"):
-                hb.write_to_file(HISTFILE)
+            except (KeyboardInterrupt, EOFError):
+                self.hb.write_to_file(self.hb.histfile)
                 sys.exit(0)
 
-            # Write command to history buffer.
-            # bash writes the command before running it
-            # so we do as well to be consistant.
-            # Prefacing a command with a single space will
-            # prevent it from being written to the history buffer
-            if not command.startswith(" "):
-                hb.append(command)
-            # ...now strip the space
-            command = command.strip()
 
-            # If command is empty we just print a new prompt
-            if command == '':
-                continue
-
-            # Check if the command is an alias
-            if command.split()[0] in alias_dict.keys():
-                cmd = command.split()
-                cmd[0] = alias_dict[cmd[0]]
-                command = " ".join(cmd)
-
-            # The previous functions are not mutually-exclusive
-            # The following are:
-
-            # `!` history commands
-            if command.startswith('!') or command.count('!!') > 0:
-                last_exit_status, hb = runners.run_bang_command(command, hb)
-
-            # Check for shell globbing
-            elif contains_glob(command):
-                last_exit_status = runners.run_glob_command(command, last_exit_status)
-
-            # pipe/AND/OR linked commands
-            elif "|" in command or "&" in command:
-                last_exit_status = dispatch_pipe_logical(command)
-
-            # Commands with redirected IO
-            elif ">" in command:
-                last_exit_status = dispatch_redirect(command)
-
-            # Shell 'builtins'
-            elif command.split()[0] in {'history', 'echo', 'cd', 'alias', 'unalias'}:
-                last_exit_status = dispatch_shell_builtin(command, hb, last_exit_status, alias_dict)
-
-            # Regular command
-            else:
-                last_exit_status = runners.run_command(command)
-
-        except (KeyboardInterrupt, EOFError):
-            hb.write_to_file(hb.histfile)
-            sys.exit(0)
-
-    return last_exit_status
+def main():
+    """Entry point for the shell"""
+    set_title(f"pish version {VERSION}")
+    shell = PishShell()
+    return shell.run()
 
 
 if __name__ == '__main__':
-    set_title(f"pish version {VERSION}")
-    exit_status = mainloop(ALIASES)
+    main()
+    sys.exit(0)
