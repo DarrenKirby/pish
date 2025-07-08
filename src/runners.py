@@ -19,7 +19,8 @@ class CommandRunner:
     def __init__(self):
         pass
 
-    def run_pipe_command(self, command: str) -> int:
+    @staticmethod
+    def run_pipe_command(command: str) -> int:
         """Run an arbitrary amount of piped commands"""
         global p
         try:
@@ -39,7 +40,8 @@ class CommandRunner:
             print(f"Failed to execute command: {e}")
             return 1
 
-    def run_and_command(self, command: str) -> int:
+    @staticmethod
+    def run_and_command(command: str) -> int:
         """Only run commands if previous were successful"""
         commands = command.split("&&")
         es = 0
@@ -77,7 +79,8 @@ class CommandRunner:
         hb.buff[-1] = cmd
         return es, hb
 
-    def run_history_command(self, command: str, hb: HistoryBuff) -> Tuple[int, HistoryBuff]:
+    @staticmethod
+    def run_history_command(command: str, hb: HistoryBuff) -> Tuple[int, HistoryBuff]:
         """Dispatcher for `history` commands"""
         args = command.split()[1:]
         if len(args) == 0:
@@ -107,7 +110,8 @@ class CommandRunner:
             return 1, hb
         return 0, hb
 
-    def run_echo_command(self, command: str, last_exit_status: int) -> int:
+    @staticmethod
+    def run_echo_command(command: str, last_exit_status: int) -> int:
         """Dispatch `echo` command"""
         args = " ".join(command.split()[1:])
         if len(args) == 0:
@@ -127,7 +131,8 @@ class CommandRunner:
             print(args)
         return 0
 
-    def run_cd_command(self, command: str, home_dir: str) -> int:
+    @staticmethod
+    def run_cd_command(command: str, home_dir: str) -> int:
         """Handle cd builtin command"""
         args = command.split()[1:]
         if len(args) == 0:
@@ -165,9 +170,10 @@ class CommandRunner:
         else:  # unalias
             aliases = self._del_alias(args[1:], aliases)
 
-        return (0, aliases)
+        return 0, aliases
 
-    def run_or_command(self, command: str) -> int:
+    @staticmethod
+    def run_or_command(command: str) -> int:
         """Only run commands if previous failed"""
         commands = command.split("||")
         es = 0
@@ -182,7 +188,8 @@ class CommandRunner:
             print(f"Failed to execute command: {e}")
             return 1
 
-    def run_append_command(self, command: str) -> int:
+    @staticmethod
+    def run_append_command(command: str) -> int:
         """redirect stdout to a file, append if exists"""
         command, filename = command.split(">>")
         cmd = shlex.split(command.strip())
@@ -196,7 +203,8 @@ class CommandRunner:
             print(f"Failed to execute command: {e}")
             return 1
 
-    def run_redirect_command(self, command: str) -> int:
+    @staticmethod
+    def run_redirect_command(command: str) -> int:
         """redirect stdout to a file, clobber if exists"""
         command, filename = command.split(">")
         cmd = shlex.split(command.strip())
@@ -210,18 +218,20 @@ class CommandRunner:
             print(f"Failed to execute command: {e}")
             return 1
 
-    def run_command(self, command: str) -> int:
+    @staticmethod
+    def run_command(command: str) -> int:
         """Run regular commands"""
         cmd = shlex.split(command)
         try:
-            es = subprocess.run(cmd, check=False)
+            es = subprocess.run(cmd, check=True)
             return es.returncode
-        except Exception:
-            print(f"Command: `{cmd[0]}` not found")
-            return 127
+        except subprocess.CalledProcessError as es:
+            print(f"Command: `{cmd[0]}` failed: {es.stderr}")
+            return es.returncode
 
     # Helper methods
-    def _del_alias(self, alias_list: list, aliases: dict) -> dict:
+    @staticmethod
+    def _del_alias(alias_list: list, aliases: dict) -> dict:
         alias = ""
         try:
             for alias in alias_list:
@@ -230,11 +240,13 @@ class CommandRunner:
             print(f"{alias} is not defined")
         return aliases
 
-    def _print_alias(self, aliases: dict) -> None:
+    @staticmethod
+    def _print_alias(aliases: dict) -> None:
         for k, v in aliases.items():
             print(f"alias {k}={v}")
 
-    def _add_alias(self, alias_str: str, aliases: dict) -> dict:
+    @staticmethod
+    def _add_alias(alias_str: str, aliases: dict) -> dict:
         cmd, alias = alias_str.split('=', 1)
         aliases[cmd] = alias
         return aliases
