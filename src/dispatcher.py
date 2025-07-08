@@ -3,7 +3,7 @@ dispatcher.py - routes commands to appropriate handlers.
 """
 
 from typing import Tuple
-from parser import CommandType, CommandParser
+from parser import CommandType
 from runners import CommandRunner
 from historybuff import HistoryBuff
 
@@ -40,7 +40,8 @@ class CommandDispatcher:
 
         return last_exit_status, hb, aliases
 
-    def _handle_quit(self, hb: HistoryBuff) -> Tuple[int, HistoryBuff, dict]:
+    @staticmethod
+    def _handle_quit(hb: HistoryBuff) -> Tuple[int, HistoryBuff, dict]:
         """Handle quit command"""
         hb.write_to_file(hb.histfile)
         import sys
