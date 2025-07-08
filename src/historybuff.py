@@ -102,6 +102,6 @@ class HistoryBuff:
         second oldest by time this code gets there to delete it.
         """
         if end is None:
-            del self.buff[start - 2]
+            del self.buff[start - 1]
         else:
-            del self.buff[start - 2:end - 1]
+            del self.buff[start - 1:end]
