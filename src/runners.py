@@ -21,6 +21,7 @@ class CommandRunner:
 
     def run_pipe_command(self, command: str) -> int:
         """Run an arbitrary amount of piped commands"""
+        global p
         try:
             commands = command.split("|")
             p1 = subprocess.Popen(shlex.split(commands[0].strip()), stdout=subprocess.PIPE)
@@ -65,9 +66,16 @@ class CommandRunner:
             cmd = hb.buff[cmd_to_run - 1]
 
         print(cmd)
-        es = self.run_command(cmd)
+        # Built-in commands need to be dispatched to the right runner,
+        # or they will not work properly.
+        if cmd[:4] == "echo":
+            es = self.run_echo_command(cmd, 0)
+        elif cmd[:2] == 'cd':
+            es = self.run_cd_command(cmd, os.path.expanduser("~"))
+        else:
+            es = self.run_command(cmd)
         hb.buff[-1] = cmd
-        return (es, hb)
+        return es, hb
 
     def run_history_command(self, command: str, hb: HistoryBuff) -> Tuple[int, HistoryBuff]:
         """Dispatcher for `history` commands"""
@@ -96,8 +104,8 @@ class CommandRunner:
             hb.print_buff(int(args[0]))
         else:
             print(f"Invalid history command: `{command}`")
-            return (1, hb)
-        return (0, hb)
+            return 1, hb
+        return 0, hb
 
     def run_echo_command(self, command: str, last_exit_status: int) -> int:
         """Dispatch `echo` command"""
