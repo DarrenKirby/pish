@@ -89,7 +89,8 @@ class HistoryBuff:
         else:
             line_count = (len(self.buff) - lines_to_print) + 1
             while lines_to_print > 0:
-                print(f"{line_count:>{line_number_width}}  {self.buff[len(self.buff) - lines_to_print]}")
+                print(f"{line_count:>{line_number_width}}  "
+                      f"{self.buff[len(self.buff) - lines_to_print]}")
                 lines_to_print -= 1
                 line_count += 1
 
@@ -114,12 +115,11 @@ class HistoryBuff:
                 # Delete single entry
                 del self.buff[start - 2]
             else:
-                if end < start:
-                    print(f"pish: history: invalid range")
-                    return None
-                if end > buffer_len:
-                    end = buffer_len
                 # Delete range
+                if end < start:
+                    print("pish: history: invalid range")
+                    return None
+                end = min(end, buffer_len)
                 del self.buff[start - 2:end - 1]
             return None
 

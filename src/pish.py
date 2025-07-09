@@ -2,7 +2,9 @@
 
 Similar to bash, but without the shell scripting parts.
 Implemented so far:
-* `echo $HOME` will output value of envvars, `echo $?` is last exit status, `echo ??` is pid of shell.
+* `echo $HOME` will output value of envvars,
+    `echo $?` is last exit status,
+    `echo ??` is pid of shell.
 * arbitrary piped commands work ie: `cat foo.txt | sort | uniq`
 * arbitrary `&&` commands work ie: `./configure && make && make install`
 * arbitrary `||` commands work ie: `mount-l || cat /etc/mtab || cat /proc/mounts`
