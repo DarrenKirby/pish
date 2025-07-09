@@ -2,6 +2,7 @@
 dispatcher.py - routes commands to appropriate handlers.
 """
 
+import sys
 from typing import Tuple
 
 from historybuff import HistoryBuff
@@ -23,9 +24,9 @@ class CommandDispatcher:
 
         if command_type == CommandType.QUIT:
             return self._handle_quit(hb)
-        elif command_type == CommandType.EMPTY:
+        if command_type == CommandType.EMPTY:
             return last_exit_status, hb, aliases
-        elif command_type == CommandType.BANG_HISTORY:
+        if command_type == CommandType.BANG_HISTORY:
             last_exit_status, hb = self.runner.run_bang_command(command, hb)
         elif command_type == CommandType.GLOB:
             last_exit_status = self.runner.run_glob_command(command, last_exit_status)
@@ -45,24 +46,22 @@ class CommandDispatcher:
     def _handle_quit(hb: HistoryBuff) -> Tuple[int, HistoryBuff, dict]:
         """Handle quit command"""
         hb.write_to_file(hb.histfile)
-        import sys
         sys.exit(0)
 
     def _dispatch_pipe_logical(self, command: str) -> int:
         """Dispatcher for pipe and logical condition commands"""
         if "||" in command:
             return self.runner.run_or_command(command)
-        elif "|" in command:
+        if "|" in command:
             return self.runner.run_pipe_command(command)
-        else:  # && command
-            return self.runner.run_and_command(command)
+        # && command
+        return self.runner.run_and_command(command)
 
     def _dispatch_redirect(self, command: str) -> int:
         """Dispatcher for I/O redirected commands"""
         if ">>" in command:
             return self.runner.run_append_command(command)
-        else:
-            return self.runner.run_redirect_command(command)
+        return self.runner.run_redirect_command(command)
 
     def _dispatch_builtin(self, command: str, hb: HistoryBuff,
                           last_exit_status: int, aliases: dict) -> Tuple[int, HistoryBuff, dict]:
