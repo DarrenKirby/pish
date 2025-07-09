@@ -2,10 +2,11 @@
 runners.py - contains a clean CommandRunner class with all execution logic.
 """
 
-import sys
 import os
-import subprocess
 import shlex
+import signal
+import subprocess
+import sys
 from string import ascii_letters
 from typing import Tuple
 
@@ -22,23 +23,103 @@ class CommandRunner:
     @staticmethod
     def run_pipe_command(command: str) -> int:
         """Run an arbitrary amount of piped commands"""
-        global p
+        processes = None
         try:
-            commands = command.split("|")
-            p1 = subprocess.Popen(shlex.split(commands[0].strip()), stdout=subprocess.PIPE)
-            prev = p1
-            for cmd in commands[1:]:
-                p = subprocess.Popen(shlex.split(cmd.strip()), stdin=prev.stdout,
-                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                prev = p
+            # Better pipe parsing that handles quoted strings
+            commands = []
+            current = []
+            in_quotes = False
+            quote_char = None
 
-            out, _err = p.communicate()
-            p.wait()
-            sys.stdout.write(out.decode())
-            return p.returncode
+            for i, char in enumerate(command):
+                if char in ('"', "'") and (i == 0 or command[i - 1] != '\\'):
+                    if not in_quotes:
+                        in_quotes = True
+                        quote_char = char
+                    elif char == quote_char:
+                        in_quotes = False
+                        quote_char = None
+                elif char == '|' and not in_quotes:
+                    commands.append(''.join(current).strip())
+                    current = []
+                    continue
+                current.append(char)
+
+            if current:
+                commands.append(''.join(current).strip())
+
+            if not commands or any(not cmd for cmd in commands):
+                print("bash: syntax error near unexpected token '|'")
+                return 1
+
+            # Create pipeline
+            processes = []
+            prev_stdout = None
+
+            for i, cmd in enumerate(commands):
+                try:
+                    if i == 0:
+                        # First command
+                        p = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE)
+                    elif i == len(commands) - 1:
+                        # Last command
+                        p = subprocess.Popen(shlex.split(cmd), stdin=prev_stdout)
+                    else:
+                        # Middle commands
+                        p = subprocess.Popen(shlex.split(cmd), stdin=prev_stdout,
+                                             stdout=subprocess.PIPE)
+
+                    processes.append(p)
+                    if p.stdout:
+                        prev_stdout = p.stdout
+
+                except FileNotFoundError:
+                    print(f"pish: {shlex.split(cmd)[0]}: command not found")
+                    # Clean up already started processes
+                    for proc in processes:
+                        try:
+                            proc.terminate()
+                        except OSError:
+                            pass
+                    return 127
+
+            # Wait for all processes to complete
+            for p in processes[:-1]:
+                p.wait()
+
+            # Get output from last process
+            return_code = processes[-1].wait()
+
+            return return_code
+
+        except KeyboardInterrupt:
+            # Clean up on Ctrl+C
+            for p in processes:
+                try:
+                    p.send_signal(signal.SIGINT)
+                except OSError:
+                    pass
+            return 130  # 128 + SIGINT
         except Exception as e:
-            print(f"Failed to execute command: {e}")
+            print(f"Failed to execute piped command: {e}")
             return 1
+        # global p
+        # try:
+        #     commands = command.split("|")
+        #     p1 = subprocess.Popen(shlex.split(commands[0].strip()), stdout=subprocess.PIPE)
+        #     prev = p1
+        #     for cmd in commands[1:]:
+        #         p = subprocess.Popen(shlex.split(cmd.strip()), stdin=prev.stdout,
+        #                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        #         prev = p
+        #
+        #     out, _err = p.communicate()
+        #     p.wait()
+        #     sys.stdout.write(out.decode())
+        #     return p.returncode
+        # except Exception as e:
+        #     print(f"Failed to execute command: {e}")
+        #     return 1
 
     @staticmethod
     def run_and_command(command: str) -> int:
@@ -59,13 +140,6 @@ class CommandRunner:
 
     def run_bang_command(self, command: str, hb: HistoryBuff) -> Tuple[int, HistoryBuff]:
         """Dispatcher for 'bang' history commands"""
-        # if command.count("!!") > 0:
-        #     cmd = command.replace('!!', hb.buff[-2])
-        # elif command[1] in ascii_letters:
-        #     cmd = hb.search_buffer(command[1:])
-        # else:
-        #     cmd_to_run = int(command.strip("!").strip())
-        #     cmd = hb.buff[cmd_to_run - 1]
         try:
             if command.count("!!") > 0:
                 # Check if we have enough history
@@ -89,7 +163,7 @@ class CommandRunner:
                     if cmd_num < 1 or cmd_num > len(hb.buff):
                         print(f"bash: {command}: event not found")
                         return 1, hb
-                    cmd = hb.buff[cmd_num - 1]
+                    cmd = hb.buff[cmd_num - 2]
                 except ValueError:
                     print(f"bash: {command}: event not found")
                     return 1, hb
@@ -100,7 +174,7 @@ class CommandRunner:
             if cmd[:4] == "echo":
                 es = self.run_echo_command(cmd, 0)
             elif cmd[:2] == 'cd':
-                es = self.run_cd_command(cmd, os.path.expanduser("~"))
+                es = self.run_cd_command(cmd)
             elif cmd[:7] == 'history':
                 es = self.run_history_command(cmd, hb)
             else:
@@ -166,7 +240,7 @@ class CommandRunner:
         return 0
 
     @staticmethod
-    def run_cd_command(command: str, home_dir: str) -> int:
+    def run_cd_command(command: str) -> int:
         """Handle cd builtin command"""
         # Set/reset $OLDPWD, but keep the old value around
         # in case the cd command fails.
