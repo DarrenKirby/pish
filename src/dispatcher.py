@@ -3,9 +3,10 @@ dispatcher.py - routes commands to appropriate handlers.
 """
 
 from typing import Tuple
+
+from historybuff import HistoryBuff
 from parser import CommandType
 from runners import CommandRunner
-from historybuff import HistoryBuff
 
 
 class CommandDispatcher:
@@ -75,6 +76,6 @@ class CommandDispatcher:
         elif cmd_name in ('alias', 'unalias'):
             last_exit_status, aliases = self.runner.run_alias_command(command, aliases)
         elif cmd_name == 'cd':
-            last_exit_status = self.runner.run_cd_command(command, self.home_dir)
+            last_exit_status = self.runner.run_cd_command(command)
 
         return last_exit_status, hb, aliases
