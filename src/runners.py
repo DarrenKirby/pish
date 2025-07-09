@@ -341,14 +341,29 @@ class CommandRunner:
     @staticmethod
     def run_append_command(command: str) -> int:
         """redirect stdout to a file, append if exists"""
-        command, filename = command.split(">>")
-        cmd = shlex.split(command.strip())
-        filename = filename.strip()
-
+        filename = None
         try:
+            # Split only on first occurrence
+            parts = command.split(">>", 1)
+            if len(parts) != 2:
+                print("pish: syntax error near unexpected token '>>'")
+                return 1
+
+            command, filename = parts
+            cmd = shlex.split(command.strip())
+            filename = filename.strip()
+
+            if not filename:
+                print("pish: syntax error near unexpected token 'newline'")
+                return 1
+
             with open(filename, "a", encoding="UTF-8") as fp:
-                es = subprocess.run(cmd, stdout=fp, check=False)
-            return es.returncode
+                result = subprocess.run(cmd, stdout=fp, check=False)
+            return result.returncode
+
+        except FileNotFoundError:
+            print(f"pish: {filename}: Permission denied")
+            return 1
         except Exception as e:
             print(f"Failed to execute command: {e}")
             return 1
@@ -356,14 +371,29 @@ class CommandRunner:
     @staticmethod
     def run_redirect_command(command: str) -> int:
         """redirect stdout to a file, clobber if exists"""
-        command, filename = command.split(">")
-        cmd = shlex.split(command.strip())
-        filename = filename.strip()
-
+        filename = None
         try:
+            # Split only on first occurrence
+            parts = command.split(">", 1)
+            if len(parts) != 2:
+                print("pish: syntax error near unexpected token '>'")
+                return 1
+
+            command, filename = parts
+            cmd = shlex.split(command.strip())
+            filename = filename.strip()
+
+            if not filename:
+                print("pish: syntax error near unexpected token 'newline'")
+                return 1
+
             with open(filename, "w", encoding="UTF-8") as fp:
-                es = subprocess.run(cmd, stdout=fp, check=False)
-            return es.returncode
+                result = subprocess.run(cmd, stdout=fp, check=False)
+            return result.returncode
+
+        except FileNotFoundError:
+            print(f"pish: {filename}: Permission denied")
+            return 1
         except Exception as e:
             print(f"Failed to execute command: {e}")
             return 1
