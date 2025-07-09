@@ -3,6 +3,7 @@ runners.py - contains a clean CommandRunner class with all execution logic.
 """
 
 import os
+import re
 import shlex
 import signal
 import subprocess
@@ -26,7 +27,7 @@ class CommandRunner:
         try:
             # Better pipe parsing that handles quoted strings
             commands = []
-            current = []
+            current: list[str] = []
             in_quotes = False
             quote_char = None
 
@@ -158,7 +159,7 @@ class CommandRunner:
             elif cmd[:2] == 'cd':
                 es = self.run_cd_command(cmd)
             elif cmd[:7] == 'history':
-                es = self.run_history_command(cmd, hb)
+                es, hb = self.run_history_command(cmd, hb)
             else:
                 es = self.run_command(cmd)
             # Replace the `!` command with its expansion in history
@@ -427,6 +428,21 @@ class CommandRunner:
 
     @staticmethod
     def _add_alias(alias_str: str, aliases: dict) -> dict:
-        cmd, alias = alias_str.split('=', 1)
-        aliases[cmd] = alias
+        # cmd, alias = alias_str.split('=', 1)
+        # aliases[cmd] = alias
+        # return aliases
+        # Match pattern: name=value or name='value' or name="value"
+        match = re.match(r'^(\w+)=(.*)$', alias_str)
+        if not match:
+            print(f"bash: alias: `{alias_str}': invalid alias name")
+            return aliases
+
+        name, value = match.groups()
+
+        # Remove surrounding quotes if present
+        if len(value) >= 2:
+            if (value[0] == value[-1]) and value[0] in ('"', "'"):
+                value = value[1:-1]
+
+        aliases[name] = value
         return aliases
