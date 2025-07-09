@@ -6,7 +6,6 @@ import os
 import shlex
 import signal
 import subprocess
-import sys
 from string import ascii_letters
 from typing import Tuple
 
@@ -103,23 +102,6 @@ class CommandRunner:
         except Exception as e:
             print(f"Failed to execute piped command: {e}")
             return 1
-        # global p
-        # try:
-        #     commands = command.split("|")
-        #     p1 = subprocess.Popen(shlex.split(commands[0].strip()), stdout=subprocess.PIPE)
-        #     prev = p1
-        #     for cmd in commands[1:]:
-        #         p = subprocess.Popen(shlex.split(cmd.strip()), stdin=prev.stdout,
-        #                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        #         prev = p
-        #
-        #     out, _err = p.communicate()
-        #     p.wait()
-        #     sys.stdout.write(out.decode())
-        #     return p.returncode
-        # except Exception as e:
-        #     print(f"Failed to execute command: {e}")
-        #     return 1
 
     @staticmethod
     def run_and_command(command: str) -> int:
@@ -221,22 +203,51 @@ class CommandRunner:
     @staticmethod
     def run_echo_command(command: str, last_exit_status: int) -> int:
         """Dispatch `echo` command"""
-        args = " ".join(command.split()[1:])
-        if len(args) == 0:
+        import re
+
+        # Parse echo flags
+        parts = shlex.split(command)
+        if len(parts) == 1:  # Just 'echo'
             print()
             return 0
-        if args[0] == "$":
-            if args[1] == "?":
-                print(last_exit_status)
-            elif args[1] == "$":
-                print(os.getpid())
+
+        add_newline = True
+        start_idx = 1
+
+        # Check for -n flag
+        if len(parts) > 1 and parts[1] == '-n':
+            add_newline = False
+            start_idx = 2
+
+        # Rejoin the arguments
+        args = " ".join(parts[start_idx:])
+
+        # Expand environment variables
+        def expand_vars(match):
+            var_name = match.group(1)
+            if var_name == '?':
+                return str(last_exit_status)
+            elif var_name == '$':
+                return str(os.getpid())
             else:
-                try:
-                    print(os.environ[args[1:]])
-                except KeyError:
-                    sys.stdout.write("\n")
+                return os.environ.get(var_name, '')
+
+        # Replace $VAR and ${VAR} patterns
+        expanded = re.sub(r'\$\{([^}]+)}', expand_vars, args)
+        expanded = re.sub(r'\$(\w+)', expand_vars, expanded)
+        expanded = re.sub(r'\$\?', str(last_exit_status), expanded)
+        expanded = re.sub(r'\$\$', str(os.getpid()), expanded)
+
+        # Handle escape sequences
+        expanded = expanded.replace('\\n', '\n')
+        expanded = expanded.replace('\\t', '\t')
+        expanded = expanded.replace('\\\\', '\\')
+
+        if add_newline:
+            print(expanded)
         else:
-            print(args)
+            print(expanded, end='')
+
         return 0
 
     @staticmethod
