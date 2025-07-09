@@ -2,8 +2,9 @@
 parser.py - determines command types without executing them.
 """
 
-from typing import Tuple
 from enum import Enum
+from typing import Tuple
+
 from utils import GlobExpander
 
 
