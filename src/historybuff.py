@@ -99,9 +99,30 @@ class HistoryBuff:
         The seemingly odd indexing here is because (like bash), pish writes commands
         to the history file _before_ running them. So if the current command is to
         delete the `most recent` command from the history, that command will be the
-        second oldest by time this code gets there to delete it.
+        second oldest by time this code gets there to delete it, and so on.
+
+        The caller doesn't care if the history deletion is successful or not. It's
+        enough just to print the error message, so we return None.
         """
-        if end is None:
-            del self.buff[start - 1]
-        else:
-            del self.buff[start - 1:end]
+        try:
+            buffer_len = len(self.buff)
+
+            if start < 1 or start > buffer_len:
+                print(f"pish: history: {start}: history position out of range")
+
+            if end is None:
+                # Delete single entry
+                del self.buff[start - 2]
+            else:
+                if end < start:
+                    print(f"pish: history: invalid range")
+                    return None
+                if end > buffer_len:
+                    end = buffer_len
+                # Delete range
+                del self.buff[start - 2:end - 1]
+            return None
+
+        except Exception as e:
+            print(f"pish: history: {e}")
+            return None
