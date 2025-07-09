@@ -55,7 +55,7 @@ class PishConfig:
             if 'alias' in data:
                 self.aliases = data['alias']
 
-        except Exception as e:
+        except IOError as e:
             print(f"Warning: Error loading config file {self.conffile}: {e}")
 
     def get_prompt(self, prompt_str: str) -> Any:
