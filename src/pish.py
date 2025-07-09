@@ -15,25 +15,25 @@ Implemented so far:
 * Shell globbing: works as expected with `*`, `?`, `[abc]`, `[a-z]`, `{1,2,3}` and `{5..1}`.
 """
 
-import sys
 import os
+import sys
 from typing import Any
 
 # prompt_toolkit/pygments imports
 from prompt_toolkit import PromptSession
-from prompt_toolkit.lexers import PygmentsLexer
-from prompt_toolkit.shortcuts import set_title
 from prompt_toolkit.completion import WordCompleter
-from prompt_toolkit.shortcuts import CompleteStyle
 from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.lexers import PygmentsLexer
+from prompt_toolkit.shortcuts import CompleteStyle
+from prompt_toolkit.shortcuts import set_title
 from pygments.lexers import BashLexer
 
 # Local imports
 from config import PishConfig
-from parser import CommandParser
-from runners import CommandRunner
 from dispatcher import CommandDispatcher
 from historybuff import HistoryBuff
+from parser import CommandParser
+from runners import CommandRunner
 from utils import get_files
 
 # Set up constants
