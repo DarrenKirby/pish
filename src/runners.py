@@ -59,25 +59,59 @@ class CommandRunner:
 
     def run_bang_command(self, command: str, hb: HistoryBuff) -> Tuple[int, HistoryBuff]:
         """Dispatcher for 'bang' history commands"""
-        if command.count("!!") > 0:
-            cmd = command.replace('!!', hb.buff[-2])
-        elif command[1] in ascii_letters:
-            cmd = hb.search_buffer(command[1:])
-        else:
-            cmd_to_run = int(command.strip("!").strip())
-            cmd = hb.buff[cmd_to_run - 1]
+        # if command.count("!!") > 0:
+        #     cmd = command.replace('!!', hb.buff[-2])
+        # elif command[1] in ascii_letters:
+        #     cmd = hb.search_buffer(command[1:])
+        # else:
+        #     cmd_to_run = int(command.strip("!").strip())
+        #     cmd = hb.buff[cmd_to_run - 1]
+        try:
+            if command.count("!!") > 0:
+                # Check if we have enough history
+                if len(hb.buff) < 2:
+                    print(f"bash: {command}: event not found")
+                    return 1, hb
+                cmd = command.replace('!!', hb.buff[-2])
 
-        print(cmd)
-        # Built-in commands need to be dispatched to the right runner,
-        # or they will not work properly.
-        if cmd[:4] == "echo":
-            es = self.run_echo_command(cmd, 0)
-        elif cmd[:2] == 'cd':
-            es = self.run_cd_command(cmd, os.path.expanduser("~"))
-        else:
-            es = self.run_command(cmd)
-        hb.buff[-1] = cmd
-        return es, hb
+            elif command[1] in ascii_letters:
+                # Search for command starting with given letters
+                search_term = command[1:]
+                cmd = hb.search_buffer(search_term)
+                if not cmd:
+                    print(f"bash: {command}: event not found")
+                    return 1, hb
+
+            else:
+                # Numeric history reference
+                try:
+                    cmd_num = int(command.strip("!").strip())
+                    if cmd_num < 1 or cmd_num > len(hb.buff):
+                        print(f"bash: {command}: event not found")
+                        return 1, hb
+                    cmd = hb.buff[cmd_num - 1]
+                except ValueError:
+                    print(f"bash: {command}: event not found")
+                    return 1, hb
+
+            print(cmd)
+            # Built-in commands need to be dispatched to the right runner,
+            # or they will not work properly.
+            if cmd[:4] == "echo":
+                es = self.run_echo_command(cmd, 0)
+            elif cmd[:2] == 'cd':
+                es = self.run_cd_command(cmd, os.path.expanduser("~"))
+            elif cmd[:7] == 'history':
+                es = self.run_history_command(cmd, hb)
+            else:
+                es = self.run_command(cmd)
+            # Replace the `!` command with its expansion in history
+            hb.buff[-1] = cmd
+            return es, hb
+
+        except Exception as e:
+            print(f"pish: history expansion failed: {e}")
+            return 1, hb
 
     @staticmethod
     def run_history_command(command: str, hb: HistoryBuff) -> Tuple[int, HistoryBuff]:
@@ -134,16 +168,47 @@ class CommandRunner:
     @staticmethod
     def run_cd_command(command: str, home_dir: str) -> int:
         """Handle cd builtin command"""
-        args = command.split()[1:]
-        if len(args) == 0:
-            os.chdir(home_dir)
-        else:
-            try:
-                os.chdir(" ".join(args))
-            except (FileNotFoundError, PermissionError, NotADirectoryError) as err:
-                print(err)
-                return 1
-        return 0
+        # Set/reset $OLDPWD, but keep the old value around
+        # in case the cd command fails.
+        try:
+            old_old_pwd = os.environ['OLDPWD']
+        except KeyError:
+            old_old_pwd = os.getcwd()
+        os.environ['OLDPWD'] = os.getcwd()
+        parts = shlex.split(command)
+
+        if len(parts) == 1:  # Just 'cd' - go home
+            target = os.path.expanduser("~")
+        elif len(parts) == 2:  # 'cd path'
+            target = parts[1]
+            # Handle - for previous directory (would need to track OLDPWD)
+            if target == '-':
+                target = old_old_pwd
+            # Expand tilde
+            target = os.path.expanduser(target)
+        else:  # Too many arguments
+            print("pish: cd: too many arguments")
+            return 1
+
+        try:
+            os.chdir(target)
+            return 0
+        except FileNotFoundError:
+            print(f"pish: cd: {target}: No such file or directory")
+            os.environ['OLDPWD'] = old_old_pwd
+            return 1
+        except NotADirectoryError:
+            print(f"pish: cd: {target}: Not a directory")
+            os.environ['OLDPWD'] = old_old_pwd
+            return 1
+        except PermissionError:
+            print(f"pish: cd: {target}: Permission denied")
+            os.environ['OLDPWD'] = old_old_pwd
+            return 1
+        except OSError as e:
+            print(f"pish: cd: {target}: {e}")
+            os.environ['OLDPWD'] = old_old_pwd
+            return 1
 
     def run_glob_command(self, command: str, last_exit_status: int) -> int:
         """Run commands with glob expansions"""
@@ -223,7 +288,7 @@ class CommandRunner:
         """Run regular commands"""
         cmd = shlex.split(command)
         try:
-            es = subprocess.run(cmd, check=True)
+            es = subprocess.run(cmd, check=False)
             return es.returncode
         except subprocess.CalledProcessError as es:
             print(f"Command: `{cmd[0]}` failed: {es.stderr}")
